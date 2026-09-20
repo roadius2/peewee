@@ -96,3 +96,33 @@ def test_missing_export_dir_raises(tmp_path):
     (tmp_path / "rl_agent_config.json").write_text('{"encoder": "x", "head_layers": 1}')
     with pytest.raises(FileNotFoundError, match="export-onnx"):
         OnnxAgent(str(tmp_path), tokenizer=TinyTokenizer())
+
+
+def _accelerator():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return None
+
+
+def test_export_restores_model_dtype(tmp_path):
+    """Export needs an fp32 CPU copy; the caller's agent must come back unchanged."""
+    from laya.onnx_backend import export_onnx
+    a = tiny_agent(tmp_path)
+    a.model = a.model.to(torch.bfloat16)
+    a.dtype = torch.bfloat16
+    export_onnx(a, str(tmp_path / "export"), quantize=False)
+    p = next(a.model.parameters())
+    assert p.dtype == torch.bfloat16 and p.device == a.device
+
+
+@pytest.mark.skipif(_accelerator() is None, reason="needs a CUDA or MPS device")
+def test_export_restores_model_device(tmp_path):
+    from laya.onnx_backend import export_onnx
+    a = tiny_agent(tmp_path)
+    a.device = _accelerator()
+    a.model = a.model.to(a.device)
+    export_onnx(a, str(tmp_path / "export"), quantize=False)
+    assert next(a.model.parameters()).device.type == a.device.type
+    assert a.predict("the customer was charged twice", QS)["answers"]["dept"]["choice"] in QS["dept"]["criteria"]

@@ -9,19 +9,23 @@ for the details.
 | phase | status | where |
 |---|---|---|
 | 0 hygiene | done | `CHANGELOG.md` "Phase 0" |
-| 1 safe to gate on (truncation reporting, unified confidence, calibration API, language guess, batch predict, patterns) | done except shipping fitted multilingual temperatures | "Phase 1" |
-| 2 decision service (dynamic batching, HTTP API, metrics, client, ONNX backend, Docker, load test, LiteLLM example) | done, unverified on real weights | "Phase 2" |
-| 3 context length | not started; the measurement is scripted | `scripts/gpu_validate.py` step 5 |
+| 1 safe to gate on (truncation reporting, unified confidence, calibration API, language guess, batch predict, patterns) | done; fitted temperatures are in `calibration/` but not yet wired as defaults | "Phase 1" |
+| 2 decision service (dynamic batching, HTTP API, metrics, client, ONNX backend, Docker, load test, LiteLLM example) | done, verified on real weights (fp32 ONNX good, int8 broken) | "Phase 2", `reports/trinity-prime-20260920` |
+| 3 context length | measured once, inconclusive: IMDB is too short to test past the trained 1,024 | `REVIEW.md` Phase 3 status note |
 | 4 per-workload fine-tuning (`laya/train.py`, teacher labelling) | not started | `REVIEW.md` §5 |
 
-178 weight-free tests pass. Nothing has run against the real checkpoints since the fork.
+180 weight-free tests pass. The full validation ran against the real checkpoints on an RTX
+5090 on 2026-09-20 (`reports/trinity-prime-20260920/report.md`); the first run surfaced and
+fixed three bugs (ONNX export left the model on CPU; `datasets` 5 dropped script datasets;
+the `imdb` alias is gone), all in `CHANGELOG.md`.
 
 ## Repository facts
 
 - GitHub: `roadius2/ultra_laya`, public. Branches: `claude/main` (the working branch, currently
-  the default) and `main` (created from it, one commit behind). The owner intends `main` to be
-  the protected mainline with a ruleset named `protect-main`; confirm the default branch and the
-  ruleset exist before opening PRs. Five Dependabot PRs for GitHub Actions bumps are open.
+  the default) and `main` (created from it, now several commits behind). The owner intends `main` to be
+  the protected mainline with a ruleset named `protect-main`. On 2026-09-20 the ruleset existed
+  but its branch include list was empty, so it protected nothing; CI only runs on pushes to
+  `main` and on PRs. Fix both before opening PRs. Five Dependabot PRs for GitHub Actions bumps are open.
 - Upstream `NandhaKishorM/laya` has a single maintainer and a large unreviewed PR backlog.
   Work on the fork; mine upstream PRs for ideas (#19 calibration and #27 preload are already
   ported, #18 head-budget and #3 server were references). The transformers-floor fix and the
@@ -49,6 +53,18 @@ for the details.
 
 ## Known gaps and judgement calls
 
+- **int8 ONNX is unusable as exported.** Dynamic weight-only quantisation of the whole graph
+  moves probabilities by up to 0.91 and flips 13 to 30% of argmaxes on all three checkpoints,
+  while fp32 ONNX matches torch exactly. Do not ship `--quantize` output; try excluding the
+  decision head and embeddings from quantisation, or static quantisation with calibration data.
+- **Fitted temperatures are not wired as defaults.** `calibration/multilingual.json` (T = 2.07
+  for the `choice:11+` bucket, fit on 438 MASSIVE examples, held-out ECE 0.37 to 0.13) and
+  `calibration/english.json` (T = 2.44) are committed. They only cover the 11+ option bucket,
+  so wiring them in `Agent._init_common` is a product decision left to the owner.
+- **The GPU box is shared.** `trinity-prime` runs an 18 GB embedding server and a TTS service
+  that has been crash-looping on CUDA out-of-memory every 15 s for two weeks; its 10 to 13 GB
+  grab collides with any run longer than a few seconds. Expect the odd OOM and rerun the step.
+  The 5090 needs the cu128 torch wheels (`TORCH_INDEX=https://download.pytorch.org/whl/cu128`).
 - `act_probability` in answers comes from an "action head" whose meaning is undocumented
   upstream; it is passed through untouched. Decide whether to document or drop it.
 - The language guess is a heuristic tuned on a small regression set in `tests/test_lang.py`.

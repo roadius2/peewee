@@ -244,7 +244,7 @@ context problem. Phase 4 is where the accuracy comes from.
 - **Option budget guard.** Warn (and expose in `usage`) when options are cut below a per-option
   token floor; document the hierarchical-choice pattern with a helper.
 
-### Phase 2: the decision service — done, see `CHANGELOG.md`; ONNX parity verified on a small BERT model, not yet on ModernBERT weights
+### Phase 2: the decision service — done, see `CHANGELOG.md`; verified on real weights on an RTX 5090 (2026-09-20, `reports/trinity-prime-20260920`): fp32 ONNX matches torch (argmax agreement 1.000, max probability difference 0.02), int8 dynamic quantisation does not (agreement 0.70 to 0.87, differences up to 0.91) and must not be served until requantised with calibration data
 - `laya/server.py`: FastAPI + uvicorn, `POST /v1/decide` (single) and `POST /v1/decide/batch`,
   `GET /healthz`, `GET /metrics` (Prometheus: latency, batch size, truncation rate, routing
   counts, per-question confidence histograms).
@@ -257,7 +257,17 @@ context problem. Phase 4 is where the accuracy comes from.
 - Thin clients: a Python client, and a LiteLLM guardrail/router hook so existing pipelines can
   call it without new code.
 
-### Phase 3: the context problem
+### Phase 3: the context problem — measured on 2026-09-20, inconclusive; see below
+Status note. `scripts/gpu_validate.py` step 5 ran on 300 IMDB test reviews for `multilingual`
+and `typed-decisions` (`reports/trinity-prime-20260920/report.md`). Both checkpoints are
+trained at `max_len` 1,024, not 512. IMDB reviews are short for this purpose (p50 about 210
+tokens, p90 about 480, max about 1,290): 9 to 10% are cut at 512, 1% at 1,024, none at 2,048
+or 4,096, so the 2,048 and 4,096 rows are identical to 1,024 and say nothing about behaviour
+past the trained length. Accuracy was flat (0.900 to 0.903 multilingual, 0.930 typed-decisions)
+and left/right truncation made no difference. Before deciding between "raise the defaults" and
+"fine-tune longer", rerun the sweep on inputs that actually exceed 1,024 tokens: filter IMDB or
+a long-document set to reviews above 1,024 tokens, or build states from real transcripts and
+tool outputs, and compare accuracy at 1,024 against 2,048 and 4,096 on that subset only.
 - **Test the encoders past their training length.** ModernBERT-large and mmBERT-base both use
   RoPE and were pre-trained to 8,192 tokens; Laya set `max_len` to 512/1,024 at fine-tuning
   time. Run the held-out suites at `max_len` 1,024, 2,048 and 4,096 with no retraining and

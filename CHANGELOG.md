@@ -33,6 +33,19 @@ upstream v0.3.4 (`d113dca`).
   `Agent._init_common` (tokenizer, temperatures, truncation default) so alternative backends
   reuse them. `Agent.model_dir` records where the checkpoint was loaded from.
 
+### Added (validation artefacts)
+- `reports/trinity-prime-20260920/`: the first validation report on real weights (RTX 5090),
+  and `calibration/{english,multilingual}.json`, temperatures fitted on MASSIVE by
+  `scripts/gpu_validate.py`. Not yet loaded by default.
+
+### Fixed
+- `export_onnx` moved the caller's model to fp32 on CPU for tracing and left it there, so the
+  next `predict` on a CUDA agent failed with a device mismatch. The model is moved back to its
+  original device and dtype after export (found on the first real GPU run).
+- `scripts/gpu_validate.py` loads MASSIVE from the hub's parquet conversion (one config, filtered
+  by `locale`) because `datasets` 4+ no longer runs dataset scripts, and IMDB as
+  `stanfordnlp/imdb` because the bare alias is gone.
+
 ## 0.4.0.dev0 (unreleased): Phase 1, safe to gate on
 
 ### Added

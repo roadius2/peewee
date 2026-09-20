@@ -43,7 +43,9 @@ def export_onnx(agent: Agent, out_dir: str, quantize: bool = False, opset: int =
     import torch
 
     os.makedirs(out_dir, exist_ok=True)
-    model = agent.model.eval().float().cpu()
+    first = next(agent.model.parameters())
+    orig_device, orig_dtype = first.device, first.dtype
+    model = agent.model.eval().float().cpu()      # the tracer wants fp32 on CPU; restored below
     if sample_items is None:
         sample_items = agent._build_items(
             "The customer was charged twice and wants a refund.",
@@ -74,6 +76,7 @@ def export_onnx(agent: Agent, out_dir: str, quantize: bool = False, opset: int =
             torch.onnx.export(model, args, onnx_path, **kw)
     finally:
         model.manual_head_attention = was_manual
+        model.to(device=orig_device, dtype=orig_dtype)   # leave the caller's agent usable
     export_seconds = time.perf_counter() - t0
     logger.info("laya.onnx: exported %s in %.1fs", onnx_path, export_seconds)
 
