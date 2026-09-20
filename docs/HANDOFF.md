@@ -61,10 +61,10 @@ the `imdb` alias is gone), all in `CHANGELOG.md`.
   for the `choice:11+` bucket, fit on 438 MASSIVE examples, held-out ECE 0.37 to 0.13) and
   `calibration/english.json` (T = 2.44) are committed. They only cover the 11+ option bucket,
   so wiring them in `Agent._init_common` is a product decision left to the owner.
-- **The GPU box is shared.** `trinity-prime` runs an 18 GB embedding server and a TTS service
-  that has been crash-looping on CUDA out-of-memory every 15 s for two weeks; its 10 to 13 GB
-  grab collides with any run longer than a few seconds. Expect the odd OOM and rerun the step.
-  The 5090 needs the cu128 torch wheels (`TORCH_INDEX=https://download.pytorch.org/whl/cu128`).
+- **The GPU box is shared.** `trinity-prime` runs an 18 GB embedding server, leaving about
+  14 GB. A TTS service that crash-looped on CUDA out-of-memory every 15 s was stopped and
+  disabled on 2026-09-20 with the owner's approval (`systemctl enable --now fish-tts` brings it
+  back). The 5090 needs the cu128 torch wheels (`TORCH_INDEX=https://download.pytorch.org/whl/cu128`).
 - `act_probability` in answers comes from an "action head" whose meaning is undocumented
   upstream; it is passed through untouched. Decide whether to document or drop it.
 - The language guess is a heuristic tuned on a small regression set in `tests/test_lang.py`.
