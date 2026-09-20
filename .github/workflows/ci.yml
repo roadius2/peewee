@@ -36,15 +36,13 @@ jobs:
           python -m pip install --upgrade pip
           # CPU-only torch keeps the job under a minute instead of pulling CUDA wheels
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -e .
+          pip install -e ".[dev]"
 
       - name: Import check
         run: python -c "import laya; print(laya.__version__); print(sorted(laya.__all__))"
 
-      - name: Routing and language-detection tests
-        run: |
-          python tests/test_router.py
-          python tests/test_criteria.py
+      - name: Unit tests (no model weights)
+        run: python -m pytest
 
   lint:
     name: lint
@@ -56,7 +54,7 @@ jobs:
           python-version: "3.11"
       - run: pip install ruff
       - name: Ruff
-        run: ruff check laya/ --select=E9,F63,F7,F82,F401,F811 --line-length=120
+        run: ruff check laya/ tests/ --select=E9,F63,F7,F82,F401,F811 --line-length=120
       - name: Byte-compile every module
         run: python -m compileall -q laya/ tests/
 
@@ -75,9 +73,9 @@ jobs:
       - name: Version must match the tag on a release
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          pkg=$(python -c "import re;print(re.search(r'version = \"(.*)\"', open('pyproject.toml').read()).group(1))")
+          pkg=$(python -c "import re;print(re.search(r'__version__ = \"(.*)\"', open('laya/__init__.py').read()).group(1))")
           tag="${GITHUB_REF_NAME#v}"
-          test "$pkg" = "$tag" || { echo "pyproject $pkg != tag $tag"; exit 1; }
+          test "$pkg" = "$tag" || { echo "version $pkg != tag $tag"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: dist

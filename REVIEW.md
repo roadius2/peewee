@@ -209,7 +209,7 @@ Phases are ordered so that each one leaves the library usable. Phase 0 and 1 are
 for trusting any decision the model makes. Phase 2 makes it a service. Phase 3 attacks the
 context problem. Phase 4 is where the accuracy comes from.
 
-### Phase 0: hygiene (about a day)
+### Phase 0: hygiene (about a day) — done, see `CHANGELOG.md`
 - Fix the transformers floor to `>=4.48.0`; drop `setup.py`; single-source the version.
 - Add a lock around `Router.load` / `_evict` / `attach` / `unload`.
 - Default `max_loaded=2` (English and multilingual), and make `Router()` warn once when it

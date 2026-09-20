@@ -1,7 +1,10 @@
 """High-level inference runtime for laya System 1 decision models."""
 import json
+import logging
 import os
-from typing import Any, Dict, Optional, Union
+import shutil
+import tempfile
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -17,33 +20,63 @@ from .common import (
     temp_bucket,
 )
 
+logger = logging.getLogger("laya")
 
-def _fix_tokenizer_config(path: str):
-    """Ensure tokenizer_config.json can be loaded across all transformers versions."""
-    cfg_file = os.path.join(path, "tokenizer", "tokenizer_config.json")
+
+def patch_tokenizer_config(tcfg: Dict[str, Any]) -> bool:
+    """Make a checkpoint's tokenizer_config loadable across transformers versions.
+
+    Mutates `tcfg` in place and returns True when anything changed. Two known problems:
+
+    * `tokenizer_class` missing or `TokenizersBackend` (written by newer tokenizers) which older
+      transformers cannot resolve; `PreTrainedTokenizerFast` loads the same tokenizer.json.
+    * Checkpoints built on the mmBERT/Gemma tokenizer store `extra_special_tokens` as a list;
+      transformers expects a mapping and raises "'list' object has no attribute 'keys'".
+    """
+    changed = False
+    if tcfg.get("tokenizer_class") in (None, "TokenizersBackend"):
+        tcfg["tokenizer_class"] = "PreTrainedTokenizerFast"
+        tcfg.pop("backend", None)
+        tcfg.pop("is_local", None)
+        changed = True
+    extra = tcfg.get("extra_special_tokens")
+    if isinstance(extra, list):
+        tcfg["extra_special_tokens"] = {"extra_%d" % i: t for i, t in enumerate(extra)}
+        changed = True
+    return changed
+
+
+def _tokenizer_dir(model_dir: str) -> Optional[str]:
+    """Directory to load the tokenizer from: the checkpoint's own, or a patched private copy.
+
+    The Hugging Face cache is shared by every process on the machine, so it is never written
+    to. When the shipped tokenizer_config.json needs patching, the tokenizer folder is copied
+    into a per-process temporary directory and patched there.
+    """
+    tok_dir = os.path.join(model_dir, "tokenizer")
+    if not os.path.isdir(tok_dir):
+        return None
+    cfg_file = os.path.join(tok_dir, "tokenizer_config.json")
     if not os.path.exists(cfg_file):
-        return
+        return tok_dir
     try:
         with open(cfg_file) as f:
             tcfg = json.load(f)
-        changed = False
-        if tcfg.get("tokenizer_class") in (None, "TokenizersBackend"):
-            tcfg["tokenizer_class"] = "PreTrainedTokenizerFast"
-            tcfg.pop("backend", None)
-            tcfg.pop("is_local", None)
-            changed = True
-        # Checkpoints built on the mmBERT/Gemma tokenizer store extra_special_tokens as a list;
-        # transformers expects a mapping and raises "'list' object has no attribute 'keys'",
-        # which makes AutoTokenizer -- and so the whole model -- fail to load.
-        extra = tcfg.get("extra_special_tokens")
-        if isinstance(extra, list):
-            tcfg["extra_special_tokens"] = {"extra_%d" % i: t for i, t in enumerate(extra)}
-            changed = True
-        if changed:
-            with open(cfg_file, "w") as f:
-                json.dump(tcfg, f, indent=2)
-    except Exception:
-        pass
+    except (OSError, ValueError) as e:
+        logger.warning("laya: could not read %s (%s); loading tokenizer as-is", cfg_file, e)
+        return tok_dir
+    if not patch_tokenizer_config(tcfg):
+        return tok_dir
+    try:
+        patched = tempfile.mkdtemp(prefix="laya-tokenizer-")
+        shutil.copytree(tok_dir, patched, dirs_exist_ok=True)
+        with open(os.path.join(patched, "tokenizer_config.json"), "w") as f:
+            json.dump(tcfg, f, indent=2)
+        logger.debug("laya: patched tokenizer_config.json into %s", patched)
+        return patched
+    except OSError as e:
+        logger.warning("laya: could not create a patched tokenizer copy (%s); loading as-is", e)
+        return tok_dir
 
 
 def _verify_compatibility(model: torch.nn.Module, cfg: Dict, weights: Dict[str, torch.Tensor], model_id: str):
@@ -134,8 +167,6 @@ class Agent:
                     f"Subfolder {subfolder!r} not found in {model_id_or_path!r}."
                 )
 
-        _fix_tokenizer_config(model_dir)
-
         cfg_path = os.path.join(model_dir, "rl_agent_config.json")
         if not os.path.exists(cfg_path):
             raise FileNotFoundError(
@@ -156,10 +187,10 @@ class Agent:
         if device is not None:
             target_device = torch.device(device)
             if target_device.type == "cuda" and not torch.cuda.is_available():
-                print("Warning: CUDA requested but not available. Falling back to CPU.")
+                logger.warning("laya: CUDA requested but not available; falling back to CPU.")
                 self.device = torch.device("cpu")
             elif target_device.type == "mps" and not (hasattr(torch.backends, "mps") and torch.backends.mps.is_available()):
-                print("Warning: MPS requested but not available. Falling back to CPU.")
+                logger.warning("laya: MPS requested but not available; falling back to CPU.")
                 self.device = torch.device("cpu")
             else:
                 self.device = target_device
@@ -171,8 +202,8 @@ class Agent:
             else:
                 self.device = torch.device("cpu")
 
-        tok_dir = os.path.join(model_dir, "tokenizer")
-        self.tok = AutoTokenizer.from_pretrained(tok_dir if os.path.exists(tok_dir) else self.cfg.get("encoder"))
+        tok_dir = _tokenizer_dir(model_dir)
+        self.tok = AutoTokenizer.from_pretrained(tok_dir if tok_dir else self.cfg.get("encoder"))
 
         enc_dir = os.path.join(model_dir, "encoder")
         self.model = build_model(self.cfg, encoder_dir=enc_dir if os.path.exists(enc_dir) else None)
@@ -215,16 +246,16 @@ class Agent:
             else:
                 raise e
 
-        if fell_back_from is not None:
-            print(
-                "\n[laya] Warning: could not place the model on %s, so it is running on CPU.\n"
-                "  Reason: %s\n"
-                "  Inference will be roughly 10-15x slower (~200-500 ms rather than ~35 ms).\n"
-                "  If this is a newer NVIDIA GPU (Blackwell / RTX 50-series), your PyTorch build\n"
-                "  may not support its CUDA architecture:\n"
-                "    pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu128\n"
-                "  See https://pytorch.org/get-started/locally/\n"
-                % (fell_back_from, fell_back_why), flush=True)
+        self.fell_back_to_cpu = fell_back_from is not None
+        if self.fell_back_to_cpu:
+            logger.warning(
+                "laya: could not place the model on %s, so it is running on CPU. Reason: %s. "
+                "Inference will be roughly 10-15x slower (~200-500 ms rather than ~35 ms). "
+                "If this is a newer NVIDIA GPU (Blackwell / RTX 50-series), your PyTorch build may "
+                "not support its CUDA architecture: "
+                "pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu128 "
+                "(see https://pytorch.org/get-started/locally/).",
+                fell_back_from, fell_back_why)
 
     @staticmethod
     def _to_internal(qdef: Dict) -> Dict:
@@ -237,68 +268,54 @@ class Agent:
             ins = json.dumps(ins)
         return {"t": t, "ins": ins, "crit": crit}
 
-    @torch.no_grad()
-    def system_one(self, state: Union[str, dict, list], questions: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-        """Evaluate typed questions across state in a single, parallel forward pass.
-
-        Args:
-            state: Text string, JSON dict, or conversation turn list.
-            questions: Dictionary mapping question_id -> question definition.
-                - choice: {"type": "choice", "instructions": "...", "criteria": {"optA": "...", ...}}
-                - score:  {"type": "score",  "instructions": "...", "criteria": ["lvl0", "lvl1", ...]}
-                - noul:   {"type": "noul",   "instructions": "..."}
-
-        Returns:
-            Dictionary with answers, probabilities, calibrated confidence, and token usage.
-        """
-        ids = list(questions.keys())
-        items = []
+    def _build_items(self, state: Union[str, dict, list], questions: Dict[str, Dict[str, Any]]) -> List[Dict]:
+        """Tokenise every question against `state` into collatable items (no torch, no weights)."""
         max_len = self.cfg.get("max_len", 512)
         head_max_len = self.cfg.get("head_max_len", 192)
-
-        for qid in ids:
-            q = self._to_internal(questions[qid])
+        items = []
+        for qid, qdef in questions.items():
+            q = self._to_internal(qdef)
             seq, markers = build_sequence(self.tok, state, q, max_len, head_max_len)
             if len(markers) != len(render_options(q)):
                 raise ValueError("question %r options exceed head_max_len=%d" % (qid, head_max_len))
             items.append({"ids": seq, "markers": markers, "qtype": QTYPES[q["t"]]})
+        return items
 
+    @torch.no_grad()
+    def _forward_logits(self, items: List[Dict]) -> Tuple[np.ndarray, np.ndarray, int]:
+        """Run one forward pass over collated items.
+
+        Returns raw (un-tempered) option logits `[n, kmax]`, action-head probabilities
+        `[n, n_act]`, and the number of non-pad input tokens. Errors propagate: a GPU failure
+        is the caller's to handle (retry, shed load, or restart), never a reason to silently
+        move a shared model to CPU for the rest of the process.
+        """
         b = collate_items([items], self.tok.pad_token_id)
         use_amp = self.device.type == "cuda"
-
-        try:
-            with torch.autocast(device_type=self.device.type, dtype=self.dtype, enabled=use_amp):
-                logits, act = self.model(
-                    b["input_ids"].to(self.device),
-                    b["attention_mask"].to(self.device),
-                    b["marker_pos"].to(self.device),
-                    b["marker_mask"].to(self.device),
-                    b["qtype"].to(self.device),
-                )
-        except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
-            if self.device.type != "cpu" and ("memory" in str(e).lower() or "cuda" in str(e).lower()):
-                print("Warning: GPU memory exceeded during inference. Falling back to CPU...")
-                self.device = torch.device("cpu")
-                self.dtype = torch.float32
-                self.model.to(self.device)
-                logits, act = self.model(
-                    b["input_ids"].to(self.device),
-                    b["attention_mask"].to(self.device),
-                    b["marker_pos"].to(self.device),
-                    b["marker_mask"].to(self.device),
-                    b["qtype"].to(self.device),
-                )
-            else:
-                raise e
-
+        with torch.autocast(device_type=self.device.type, dtype=self.dtype, enabled=use_amp):
+            logits, act = self.model(
+                b["input_ids"].to(self.device),
+                b["attention_mask"].to(self.device),
+                b["marker_pos"].to(self.device),
+                b["marker_mask"].to(self.device),
+                b["qtype"].to(self.device),
+            )
         logits = logits.float().cpu().numpy()
         act = torch.softmax(act.float(), -1).cpu().numpy()
+        return logits, act, int(b["attention_mask"].sum())
 
+    def _postprocess(
+        self,
+        questions: Dict[str, Dict[str, Any]],
+        items: List[Dict],
+        logits: np.ndarray,
+        act: np.ndarray,
+        n_tokens: int,
+    ) -> Dict[str, Any]:
+        """Turn raw logits into the public answer payload (temperature, confidence, labels)."""
         answers = {}
-        n_tokens = int(b["attention_mask"].sum())
-
-        for r, qid in enumerate(ids):
-            q = self._to_internal(questions[qid])
+        for r, (qid, qdef) in enumerate(questions.items()):
+            q = self._to_internal(qdef)
             k = len(items[r]["markers"])
             qt = QTYPES[q["t"]]
             t_scale = self.temperature_by_options.get(temp_bucket(qt, k), self.temperature[qt])
@@ -341,6 +358,23 @@ class Agent:
             "answers": answers,
             "usage": {"input_tokens": n_tokens, "output_tokens": 0},
         }
+
+    def system_one(self, state: Union[str, dict, list], questions: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Evaluate typed questions across state in a single, parallel forward pass.
+
+        Args:
+            state: Text string, JSON dict, or conversation turn list.
+            questions: Dictionary mapping question_id -> question definition.
+                - choice: {"type": "choice", "instructions": "...", "criteria": {"optA": "...", ...}}
+                - score:  {"type": "score",  "instructions": "...", "criteria": ["lvl0", "lvl1", ...]}
+                - noul:   {"type": "noul",   "instructions": "..."}
+
+        Returns:
+            Dictionary with answers, probabilities, calibrated confidence, and token usage.
+        """
+        items = self._build_items(state, questions)
+        logits, act, n_tokens = self._forward_logits(items)
+        return self._postprocess(questions, items, logits, act, n_tokens)
 
     predict = system_one
 

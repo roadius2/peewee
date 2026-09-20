@@ -139,7 +139,7 @@ The English checkpoint collapses on non-Latin scripts (Khmer scores **0.000 accu
 
 ### Production Preload & Memory
 
-A cold checkpoint build costs seconds; language detection costs microseconds. At the default `max_loaded=1`, traffic that alternates languages rebuilds a model on *every* request (measured at a 7.4 s median reload on CPU and 10.3 s on T4).
+A cold checkpoint build costs seconds; language detection costs microseconds. The default `max_loaded=2` keeps the English and multilingual checkpoints resident together; at `max_loaded=1`, traffic that alternates languages rebuilds a model on *every* request (measured at a 7.4 s median reload on CPU and 10.3 s on T4), and the router logs a warning each time it evicts.
 
 For a server or production app, preload:
 
@@ -155,13 +155,14 @@ router.preload(["english", "multilingual"])
 router.attach("english", existing_agent)
 
 # Manage resident memory (default keeps 1 hot, LRU eviction)
-router = Router(max_loaded=2)       # keep two hot
+router = Router(max_loaded=3)       # keep all three hot (default is 2)
 router.unload()                     # free memory
 ```
 
 | Deployment Mode | Per-Request Latency | Model Reloads |
 |---|---|---|
-| `Router()` (lazy, `max_loaded=1`) | 7 to 10 s on every language switch | 1 per switch |
+| `Router(max_loaded=1)` (lazy) | 7 to 10 s on every language switch | 1 per switch |
+| `Router()` (lazy, `max_loaded=2`) | 7 to 10 s on the first request per checkpoint, then 32.8 ms | none between English and multilingual |
 | `Router(preload=True)` | **32.8 ms (GPU) / 193–464 ms (CPU)** | **none** |
 
 ---

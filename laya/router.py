@@ -27,10 +27,14 @@ primary routing signal.
 `auto_task_detection=True` or pass `task="typed_decisions"`: it is fine-tuned on four specific
 synthetic workflows and should not be a silent default.
 """
+import logging
 import os
+import threading
 from typing import Any, Dict, List, Optional, Union
 
 from .lang import analyse
+
+logger = logging.getLogger("laya.router")
 
 # The hub repo bundles all three checkpoints; only the requested subfolder is downloaded.
 BUNDLE_REPO = "convaiinnovations/laya"
@@ -130,7 +134,13 @@ class Router:
         r.predict(state, questions, model="typed-decisions")                     # explicit
 
     Models are downloaded and built on first use. `max_loaded` caps how many stay resident
-    (least-recently-used is evicted), because all three together are ~1.16B parameters.
+    (least-recently-used is evicted), because all three together are ~1.16B parameters. The
+    default of 2 keeps the English and multilingual checkpoints hot together, which is what
+    mixed-language traffic needs; an eviction during `predict` is logged as a warning because
+    it means a request paid for a model rebuild.
+
+    Loading, eviction and attachment are serialised with a re-entrant lock, so one Router can
+    be shared across threads (a thread-pool server, for example).
 
     For a server or a demo, preload instead: a cold load costs seconds, while detection costs
     microseconds, so anything that alternates languages at `max_loaded=1` reloads on every
@@ -146,7 +156,7 @@ class Router:
         models: Optional[Dict[str, str]] = None,
         device: Optional[str] = None,
         token: Optional[str] = None,
-        max_loaded: int = 1,
+        max_loaded: int = 2,
         default: str = "english",
         auto_task_detection: bool = False,
         standalone_repos: bool = False,
@@ -162,37 +172,56 @@ class Router:
         self.auto_task_detection = bool(auto_task_detection)
         self._agents: Dict[str, Any] = {}
         self._order: List[str] = []          # least-recently-used first
+        self._lock = threading.RLock()
         if preload:
             self.preload()
 
     # ------------------------------------------------------------------ loading
     def load(self, name: str):
-        """Return the Agent for `name`, downloading and building it on first use."""
+        """Return the Agent for `name`, downloading and building it on first use.
+
+        Thread-safe: concurrent callers asking for the same checkpoint build it once.
+        """
         key = normalise_name(name)
-        if key in self._agents:
-            self._touch(key)
-            return self._agents[key]
+        with self._lock:
+            if key in self._agents:
+                self._touch(key)
+                return self._agents[key]
+            agent = self._build(key)
+            self._agents[key] = agent
+            self._order.append(key)
+            evicted = self._evict()
+            if evicted:
+                logger.warning(
+                    "laya.Router: loading %r evicted %s (max_loaded=%d). If this happens per "
+                    "request, raise max_loaded or use Router(preload=True).",
+                    key, evicted, self.max_loaded)
+            return agent
+
+    def _build(self, key: str):
+        """Construct the Agent for an already-normalised key. Split out so tests can stub it."""
         from .agent import Agent
         repo, sub = _split(self.models[key])
-        agent = Agent(repo, device=self.device, token=self.token, subfolder=sub)
-        self._agents[key] = agent
-        self._order.append(key)
-        self._evict()
-        return agent
+        return Agent(repo, device=self.device, token=self.token, subfolder=sub)
 
     def _touch(self, key: str):
         if key in self._order:
             self._order.remove(key)
         self._order.append(key)
 
-    def _evict(self):
+    def _evict(self) -> List[str]:
+        """Drop least-recently-used agents beyond `max_loaded`; return the names dropped."""
+        victims = []
         while len(self._order) > self.max_loaded:
             victim = self._order.pop(0)
             self._agents.pop(victim, None)
+            victims.append(victim)
         if len(self._order) < len(self._agents):     # keep the two views consistent
             for k in list(self._agents):
                 if k not in self._order:
                     self._agents.pop(k, None)
+                    victims.append(k)
+        return victims
 
     def attach(self, name: str, agent: Any):
         """Register an already-built Agent under `name` instead of loading a second copy.
@@ -202,9 +231,10 @@ class Router:
         in memory -- a duplicate 421M parameters.
         """
         key = normalise_name(name)
-        self._agents[key] = agent
-        self._touch(key)
-        self.max_loaded = max(self.max_loaded, len(self._agents))
+        with self._lock:
+            self._agents[key] = agent
+            self._touch(key)
+            self.max_loaded = max(self.max_loaded, len(self._agents))
         return agent
 
     def preload(self, names: Optional[List[str]] = None):
@@ -212,26 +242,29 @@ class Router:
 
         A cold load costs seconds; language detection costs microseconds. With every
         checkpoint resident, routing is effectively free -- which is what you want in a
-        server or a demo. `max_loaded` is raised to fit whatever is preloaded, otherwise
-        the LRU would immediately evict what this just built.
+        server or a demo. `max_loaded` is raised to fit both the requested checkpoints and
+        everything already resident, so incremental preloading never evicts either
+        (upstream PR #27).
         """
         names = [normalise_name(n) for n in (names or list(self.models))]
-        self.max_loaded = max(self.max_loaded, len(names), len(self._agents))
-        for n in names:
-            if n not in self._agents:      # an attached agent is already built
-                self.load(n)
+        with self._lock:
+            self.max_loaded = max(self.max_loaded, len(set(names) | set(self._agents)))
+            for n in names:
+                if n not in self._agents:      # an attached agent is already built
+                    self.load(n)
         return self
 
     def unload(self, name: Optional[str] = None):
         """Free one model, or all of them."""
-        if name is None:
-            self._agents.clear()
-            self._order.clear()
-        else:
-            key = normalise_name(name)
-            self._agents.pop(key, None)
-            if key in self._order:
-                self._order.remove(key)
+        with self._lock:
+            if name is None:
+                self._agents.clear()
+                self._order.clear()
+            else:
+                key = normalise_name(name)
+                self._agents.pop(key, None)
+                if key in self._order:
+                    self._order.remove(key)
 
     @property
     def loaded(self) -> List[str]:
@@ -263,7 +296,7 @@ class Router:
 
         workflow = match_typed_decisions_workflow(questions or {})
         if workflow and self.auto_task_detection:
-            return RouteDecision(model="typed-decisions", repo=self.models["typed-decisions"],
+            return RouteDecision(model="typed-decisions", repo=_repo_str(self.models["typed-decisions"]),
                                  reason="question ids match the %r typed-decisions workflow" % workflow,
                                  detection=None, workflow=workflow)
 
