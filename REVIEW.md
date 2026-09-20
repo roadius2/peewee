@@ -244,7 +244,7 @@ context problem. Phase 4 is where the accuracy comes from.
 - **Option budget guard.** Warn (and expose in `usage`) when options are cut below a per-option
   token floor; document the hierarchical-choice pattern with a helper.
 
-### Phase 2: the decision service — done, see `CHANGELOG.md`; verified on real weights on an RTX 5090 (2026-09-20, `reports/trinity-prime-20260920`): fp32 ONNX matches torch (argmax agreement 1.000, max probability difference 0.02), int8 dynamic quantisation does not (agreement 0.70 to 0.87, differences up to 0.91) and must not be served until requantised with calibration data
+### Phase 2: the decision service — done, see `CHANGELOG.md`; verified on real weights on an RTX 5090 (2026-09-20, `reports/trinity-prime-20260920`): fp32 ONNX matches torch (argmax agreement 1.000, max probability difference 0.02), the original dynamic int8 did not (agreement 0.70 to 0.87, differences up to 0.91) and was replaced by weight-only int8, see section 7
 - `laya/server.py`: FastAPI + uvicorn, `POST /v1/decide` (single) and `POST /v1/decide/batch`,
   `GET /healthz`, `GET /metrics` (Prometheus: latency, batch size, truncation rate, routing
   counts, per-question confidence histograms).
@@ -315,10 +315,14 @@ tool outputs, and compare accuracy at 1,024 against 2,048 and 4,096 on that subs
 
 Carried over from the first two development sessions; see `reports/trinity-prime-20260920/`.
 
-- **int8 ONNX is unusable as exported.** Dynamic weight-only quantisation of the whole graph
-  moves probabilities by up to 0.91 and flips 13 to 30% of argmaxes on all three checkpoints,
-  while fp32 ONNX matches torch exactly. Do not ship `--quantize` output; try excluding the
-  decision head and embeddings from quantisation, or static quantisation with calibration data.
+- **int8 ONNX, resolved.** Dynamic int8 (activations quantised too) broke the GeGLU feed-forward
+  blocks: probabilities moved by up to 0.91 and 13 to 30% of argmaxes flipped. Per-channel
+  weights, unsigned weights, pre-processing and excluding the head all failed the same way;
+  excluding the MLP alone recovered most of it. `--quantize` now does weight-only int8
+  (`MatMulNBits`, block 128) on the encoder's linear weights, which tracks fp32 to within 0.06
+  at about 40% of the size but is no faster on CPU. A faster CPU path needs activation
+  quantisation that survives the MLP outliers (SmoothQuant-style scaling or static calibration
+  with per-channel activation ranges), which is open.
 - **Fitted temperatures are not wired as defaults.** `calibration/multilingual.json` (T = 2.07
   for the `choice:11+` bucket, fit on 438 MASSIVE examples, held-out ECE 0.37 to 0.13) and
   `calibration/english.json` (T = 2.44) are committed. They only cover the 11+ option bucket,

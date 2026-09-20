@@ -89,6 +89,17 @@ def test_export_quantized(tmp_path):
     assert abs(sum(p.values()) - 1.0) < 1e-3
     full = OnnxAgent(out, tokenizer=TinyTokenizer(), prefer_quantized=False)
     assert full.quantized is False
+    # weight-only int8: encoder weights are MatMulNBits, activations and the head stay fp32,
+    # so probabilities track the fp32 graph closely (dynamic int8 broke the MLP on real weights)
+    import onnx
+    ops = {n.op_type for n in onnx.load(o.onnx_path).graph.node}
+    assert "MatMulNBits" in ops and "DynamicQuantizeLinear" not in ops
+    assert meta["quantization"].startswith("weight-only int8")
+    ref = full.system_one("hello there", QS)["answers"]
+    for qid in QS:
+        if "probabilities" in ref[qid]:
+            for k, v in ref[qid]["probabilities"].items():
+                assert abs(v - res["answers"][qid]["probabilities"][k]) < 0.05
 
 
 def test_missing_export_dir_raises(tmp_path):

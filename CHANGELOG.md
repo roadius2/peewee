@@ -42,6 +42,12 @@ upstream v0.3.4 (`d113dca`).
   `scripts/gpu_validate.py`. Not yet loaded by default.
 
 ### Fixed
+- `--quantize` now writes a weight-only int8 export (`MatMulNBits` on the encoder's linear
+  weights, activations and the decision head in fp32). The previous dynamic int8 recipe broke the
+  GeGLU feed-forward blocks on the real checkpoints: probabilities moved by up to 0.91 and 13 to
+  30% of argmaxes flipped. The new export tracks fp32 to within 0.06 on all three checkpoints at
+  about 40% of the file size. It is not faster than fp32 on CPU; the gain is memory. Needs the
+  `onnx-ir` package, added to the `onnx` extra.
 - `OnnxAgent` no longer drops to CPU quietly. An explicit `providers` list naming a provider the
   runtime lacks raises at construction, and the automatic choice logs a warning when torch can see
   a CUDA device but the installed `onnxruntime` wheel has no CUDA provider. The service maps

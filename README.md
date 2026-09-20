@@ -220,7 +220,8 @@ agent = OnnxAgent("./laya-english-onnx")      # same predict / predict_many API
 ```
 
 The export directory is self-contained (model, config, tokenizer, temperatures). `--quantize`
-adds an int8 model that the runtime prefers; measure accuracy on your own labelled set before
+adds a weight-only int8 model (about 40% of the fp32 size, same answers to within a few
+hundredths of probability) that the runtime prefers; measure accuracy on your own labelled set before
 choosing it. Export parity is tested in CI on a small BERT-style model; the ModernBERT and
 mmBERT encoders should be verified once with real weights (`tests/test_local_e2e.py` plus an
 export) before relying on the ONNX path in production.
