@@ -244,7 +244,7 @@ context problem. Phase 4 is where the accuracy comes from.
 - **Option budget guard.** Warn (and expose in `usage`) when options are cut below a per-option
   token floor; document the hierarchical-choice pattern with a helper.
 
-### Phase 2: the decision service
+### Phase 2: the decision service — done, see `CHANGELOG.md`; ONNX parity verified on a small BERT model, not yet on ModernBERT weights
 - `laya/server.py`: FastAPI + uvicorn, `POST /v1/decide` (single) and `POST /v1/decide/batch`,
   `GET /healthz`, `GET /metrics` (Prometheus: latency, batch size, truncation rate, routing
   counts, per-question confidence histograms).

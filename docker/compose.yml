@@ -1,0 +1,26 @@
+# docker compose -f docker/compose.yml up
+services:
+  laya:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile          # swap for Dockerfile.cuda and add the gpu block below
+    ports: ["8000:8000"]
+    environment:
+      LAYA_MODELS: english,multilingual
+      LAYA_MAX_BATCH: "32"
+      LAYA_MAX_WAIT_MS: "5"
+      LAYA_WORKERS: "1"
+      # LAYA_API_KEY: change-me
+      # LAYA_CALIBRATION: /calibration/english.json
+      # LAYA_BACKEND: onnx
+      # LAYA_MODELS: english=/models/english-onnx,multilingual=/models/multilingual-onnx
+    volumes:
+      - laya-hub:/root/.cache/huggingface
+      # - ./calibration:/calibration:ro
+      # - ./models:/models:ro
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices: [{driver: nvidia, count: 1, capabilities: [gpu]}]
+volumes:
+  laya-hub:

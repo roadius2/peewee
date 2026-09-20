@@ -1,0 +1,17 @@
+# CUDA image for the Laya decision service.
+#   docker build -f docker/Dockerfile.cuda -t laya:cuda .
+#   docker run --gpus all -p 8000:8000 -e LAYA_DEVICE=cuda -v laya-hub:/root/.cache/huggingface laya:cuda
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 USE_TF=0 USE_TORCH=1 TOKENIZERS_PARALLELISM=false \
+    HF_HOME=/root/.cache/huggingface DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip python3-venv \
+ && rm -rf /var/lib/apt/lists/* && ln -sf /usr/bin/python3 /usr/bin/python
+WORKDIR /app
+RUN pip install --no-cache-dir --upgrade pip \
+ && pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu124
+COPY pyproject.toml README.md LICENSE NOTICE ./
+COPY laya ./laya
+RUN pip install --no-cache-dir ".[server]"
+EXPOSE 8000
+HEALTHCHECK --interval=15s --timeout=5s --start-period=180s CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3).status==200 else 1)"
+CMD ["laya", "serve", "--host", "0.0.0.0", "--port", "8000", "--device", "cuda"]

@@ -141,6 +141,47 @@ def _verify_compatibility(model: torch.nn.Module, cfg: Dict, weights: Dict[str, 
         )
 
 
+def resolve_checkpoint(model_id_or_path: str, token: Optional[str] = None, subfolder: Optional[str] = None,
+                       require_weights: bool = True) -> Tuple[str, Dict[str, Any]]:
+    """Locate a checkpoint directory (downloading from the hub if needed) and load its config.
+
+    Returns `(model_dir, cfg)`. With `require_weights`, `model.safetensors` must be present;
+    an ONNX export directory carries `model.onnx` instead and passes `require_weights=False`.
+    """
+    model_dir = model_id_or_path
+    if not os.path.exists(model_dir):
+        if model_id_or_path.startswith(("/", "./", "../")) or os.path.isabs(model_id_or_path):
+            raise FileNotFoundError(
+                f"Local model path not found: {model_id_or_path!r}. "
+                f"Check that the directory exists and that training saved the model successfully."
+            )
+        from huggingface_hub import snapshot_download
+
+        kw = {"token": token or os.environ.get("HF_TOKEN")}
+        if subfolder:
+            # fetch only the requested checkpoint, not every checkpoint in the repo
+            kw["allow_patterns"] = [f"{subfolder}/*"]
+        model_dir = snapshot_download(model_id_or_path, **kw)
+
+    if subfolder:
+        model_dir = os.path.join(model_dir, subfolder)
+        if not os.path.isdir(model_dir):
+            raise FileNotFoundError(f"Subfolder {subfolder!r} not found in {model_id_or_path!r}.")
+
+    cfg_path = os.path.join(model_dir, "rl_agent_config.json")
+    if not os.path.exists(cfg_path):
+        raise FileNotFoundError(
+            f"Incompatible model: {model_id_or_path!r} does not contain 'rl_agent_config.json'. "
+            f"Make sure you are loading a compatible RL Agent model (e.g. 'convaiinnovations/laya')."
+        )
+    with open(cfg_path) as f:
+        cfg = json.load(f)
+
+    if require_weights and not os.path.exists(os.path.join(model_dir, "model.safetensors")):
+        raise FileNotFoundError(f"Incompatible model: 'model.safetensors' not found in {model_id_or_path!r}.")
+    return model_dir, cfg
+
+
 class Agent:
     """System 1 decision model runtime: fast, non-autoregressive, calibrated decisions."""
 
@@ -168,45 +209,10 @@ class Agent:
         transcript needs.
         """
         from safetensors.torch import load_file
-        from transformers import AutoTokenizer
 
-        model_dir = model_id_or_path
-        if not os.path.exists(model_dir):
-            if model_id_or_path.startswith(("/", "./", "../")) or os.path.isabs(model_id_or_path):
-                raise FileNotFoundError(
-                    f"Local model path not found: {model_id_or_path!r}. "
-                    f"Check that the directory exists and that training saved the model successfully."
-                )
-            from huggingface_hub import snapshot_download
-
-            kw = {"token": token or os.environ.get("HF_TOKEN")}
-            if subfolder:
-                # fetch only the requested checkpoint, not every checkpoint in the repo
-                kw["allow_patterns"] = [f"{subfolder}/*"]
-            model_dir = snapshot_download(model_id_or_path, **kw)
-
-        if subfolder:
-            model_dir = os.path.join(model_dir, subfolder)
-            if not os.path.isdir(model_dir):
-                raise FileNotFoundError(
-                    f"Subfolder {subfolder!r} not found in {model_id_or_path!r}."
-                )
-
-        cfg_path = os.path.join(model_dir, "rl_agent_config.json")
-        if not os.path.exists(cfg_path):
-            raise FileNotFoundError(
-                f"Incompatible model: {model_id_or_path!r} does not contain 'rl_agent_config.json'. "
-                f"Make sure you are loading a compatible RL Agent model (e.g. 'convaiinnovations/rl-agent')."
-            )
-
-        with open(cfg_path) as f:
-            self.cfg = json.load(f)
-
+        model_dir, self.cfg = resolve_checkpoint(model_id_or_path, token=token, subfolder=subfolder)
+        self.model_dir = model_dir
         weights_path = os.path.join(model_dir, "model.safetensors")
-        if not os.path.exists(weights_path):
-            raise FileNotFoundError(
-                f"Incompatible model: 'model.safetensors' not found in {model_id_or_path!r}."
-            )
 
         # 1. Device resolution with automatic fallback
         if device is not None:
@@ -227,8 +233,7 @@ class Agent:
             else:
                 self.device = torch.device("cpu")
 
-        tok_dir = _tokenizer_dir(model_dir)
-        self.tok = AutoTokenizer.from_pretrained(tok_dir if tok_dir else self.cfg.get("encoder"))
+        self._init_common(model_dir, calibration, truncate)
 
         enc_dir = os.path.join(model_dir, "encoder")
         self.model = build_model(self.cfg, encoder_dir=enc_dir if os.path.exists(enc_dir) else None)
@@ -247,13 +252,6 @@ class Agent:
         except Exception:
             pass
 
-        self.temperature = self.cfg.get("temperature", [1.0, 1.0, 1.0])
-        self.temperature_by_options = self.cfg.get("temperature_by_options", {})
-        self.calibration_source = "checkpoint"
-        if calibration:
-            self.load_calibration(calibration)
-        self.truncate = _check_truncate(truncate)
-        self._warned = set()
         self.dtype = amp_dtype(self.cfg.get("amp_dtype", "fp16"))
 
         if self.device.type == "cuda" and torch.cuda.get_device_capability(self.device)[0] < 8:
@@ -297,6 +295,23 @@ class Agent:
         if not isinstance(ins, str):
             ins = json.dumps(ins)
         return {"t": t, "ins": ins, "crit": crit}
+
+    def _init_common(self, model_dir: str, calibration: Optional[str], truncate: Optional[str],
+                     tokenizer: Any = None) -> None:
+        """Tokenizer, temperatures and defaults shared by every backend (torch, ONNX)."""
+        if tokenizer is not None:
+            self.tok = tokenizer
+        else:
+            from transformers import AutoTokenizer
+            tok_dir = _tokenizer_dir(model_dir)
+            self.tok = AutoTokenizer.from_pretrained(tok_dir if tok_dir else self.cfg.get("encoder"))
+        self.temperature = self.cfg.get("temperature", [1.0, 1.0, 1.0])
+        self.temperature_by_options = self.cfg.get("temperature_by_options", {})
+        self.calibration_source = "checkpoint"
+        if calibration:
+            self.load_calibration(calibration)
+        self.truncate = _check_truncate(truncate)
+        self._warned = set()
 
     # ------------------------------------------------------------------ pipeline pieces
     def _warn_once(self, key: str, msg: str, *args):

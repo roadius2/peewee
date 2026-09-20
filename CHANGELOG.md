@@ -3,6 +3,36 @@
 All notable changes to this fork. Upstream is `NandhaKishorM/laya`; this fork diverged at
 upstream v0.3.4 (`d113dca`).
 
+## 0.4.0.dev0 (unreleased): Phase 2, the decision service
+
+### Added
+- **`laya serve`** (`laya/serving.py`): a FastAPI service around a preloaded `Router` with one
+  `DynamicBatcher` per checkpoint. Requests are routed in pure Python, queued per checkpoint, and
+  flushed into `Agent.predict_many` when `LAYA_MAX_BATCH` questions are waiting or
+  `LAYA_MAX_WAIT_MS` has passed. Endpoints: `POST /v1/decide`, `POST /v1/decide/batch`,
+  `GET /healthz`, `GET /readyz`, `GET /metrics` (Prometheus). Optional bearer auth
+  (`LAYA_API_KEY`), state size limit, per-checkpoint calibration files, default truncation side.
+  Inference runs in a thread pool (`LAYA_WORKERS`, default 1) so the event loop keeps accepting.
+- **`laya.client.LayaClient`**: standard-library HTTP client with `decide`, `decide_many`, `health`.
+- **ONNX export and runtime** (`laya/onnx_backend.py`): `laya export-onnx <checkpoint> <dir>
+  [--quantize]` writes a self-contained export directory; `OnnxAgent(dir)` is an `Agent` whose
+  forward pass runs in ONNX Runtime (CUDA when available, else CPU) with the same `predict` and
+  `predict_many` API. `LAYA_BACKEND=onnx` serves exports. The decision head's attention has an
+  explicit, shape-dynamic implementation used during export because PyTorch's fused
+  encoder-layer fast path bakes the sample sequence length into the graph.
+- **Docker**: `docker/Dockerfile` (CPU), `docker/Dockerfile.cuda`, `docker/compose.yml`, with
+  readiness-based health checks and a persistent hub cache volume.
+- **`scripts/loadtest.py`**: concurrency load test reporting p50/p95/p99 and throughput.
+- **`examples/litellm_guardrail.py`**: a LiteLLM pre-call guardrail and a model-picking helper
+  that call the service.
+- `pip install "laya[server]"`, `"laya[onnx]"`, and a `laya` console script (`serve`,
+  `export-onnx`).
+
+### Changed
+- `Agent.__init__` is split into `resolve_checkpoint` (locate/download, load config) and
+  `Agent._init_common` (tokenizer, temperatures, truncation default) so alternative backends
+  reuse them. `Agent.model_dir` records where the checkpoint was loaded from.
+
 ## 0.4.0.dev0 (unreleased): Phase 1, safe to gate on
 
 ### Added

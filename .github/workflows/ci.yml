@@ -41,7 +41,7 @@ jobs:
       - name: Import check
         run: python -c "import laya; print(laya.__version__); print(sorted(laya.__all__))"
 
-      - name: Unit tests (no model weights)
+      - name: Unit tests (no model weights; includes service and ONNX parity on a tiny model)
         run: python -m pytest
 
   lint:

@@ -171,6 +171,62 @@ router.unload()                     # free memory
 
 ---
 
+## Running it as a service
+
+One process, one preloaded `Router`, and a dynamic batcher per checkpoint: requests that arrive
+within a few milliseconds of each other share a forward pass, so hundreds of agents polling the
+service get GPU-batch throughput without coordinating.
+
+```bash
+pip install "laya[server]"
+laya serve --models english,multilingual --port 8000       # or: python -m laya serve
+curl -s localhost:8000/v1/decide -H 'content-type: application/json' -d '{
+  "state": {"body": "billed twice, refund today or we cancel"},
+  "questions": {"churn": {"type": "noul", "instructions": "Does the user threaten to leave?"}}}'
+```
+
+```python
+from laya.client import LayaClient            # standard library only
+c = LayaClient("http://localhost:8000")
+c.decide(state, questions, truncate="left")   # same payload as agent.predict, plus "routing"
+c.decide_many([{"state": s, "questions": questions} for s in states])
+```
+
+| endpoint | purpose |
+|---|---|
+| `POST /v1/decide` | `{"state", "questions", "model"?, "lang"?, "truncate"?}` |
+| `POST /v1/decide/batch` | `{"requests": [...]}`; per-item errors come back as `{"error", "status"}` |
+| `GET /healthz`, `GET /readyz` | liveness and readiness (200 once every configured checkpoint is resident) |
+| `GET /metrics` | Prometheus: request latency, batch size, forward-pass time, truncation rate, confidence histogram |
+
+Configuration is by environment variable (`LAYA_MODELS`, `LAYA_DEVICE`, `LAYA_MAX_BATCH`,
+`LAYA_MAX_WAIT_MS`, `LAYA_API_KEY`, `LAYA_CALIBRATION`, `LAYA_TRUNCATE`, `LAYA_BACKEND`); see the
+docstring of `laya/serving.py` for the full list. `docker/` has CPU and CUDA images and a compose
+file; `scripts/loadtest.py` reports p50/p95/p99 and throughput against a running service;
+`examples/litellm_guardrail.py` wires the service into LiteLLM as a guardrail and model router.
+
+### ONNX Runtime backend (CPU)
+
+```bash
+pip install "laya[onnx]"
+laya export-onnx convaiinnovations/laya ./laya-english-onnx --quantize
+laya export-onnx convaiinnovations/laya ./laya-ml-onnx --subfolder multilingual --quantize
+LAYA_BACKEND=onnx LAYA_MODELS=english=./laya-english-onnx,multilingual=./laya-ml-onnx laya serve
+```
+
+```python
+from laya.onnx_backend import OnnxAgent
+agent = OnnxAgent("./laya-english-onnx")      # same predict / predict_many API
+```
+
+The export directory is self-contained (model, config, tokenizer, temperatures). `--quantize`
+adds an int8 model that the runtime prefers; measure accuracy on your own labelled set before
+choosing it. Export parity is tested in CI on a small BERT-style model; the ModernBERT and
+mmBERT encoders should be verified once with real weights (`tests/test_local_e2e.py` plus an
+export) before relying on the ONNX path in production.
+
+---
+
 ## Single-Model Mode (Direct SDK)
 
 If you only need a single checkpoint for a dedicated pipeline, you can load models directly:

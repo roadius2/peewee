@@ -128,6 +128,36 @@ def build_sequence(
     return ids, markers, info
 
 
+def _manual_self_attention(mha: nn.MultiheadAttention, x: torch.Tensor, pad: torch.Tensor) -> torch.Tensor:
+    """`mha(x, x, x, key_padding_mask=pad)` written out in plain ops (batch_first, no bias_kv).
+
+    PyTorch's fused fast path traces with the sample's sequence length baked into a reshape,
+    which breaks ONNX export for any other length. This path is shape-dynamic and numerically
+    the same; it is only used when `DecisionModel.manual_head_attention` is set (export).
+    """
+    B, L, D = x.shape
+    H = mha.num_heads
+    hd = D // H
+    qkv = nn.functional.linear(x, mha.in_proj_weight, mha.in_proj_bias)
+    q, k, v = qkv.chunk(3, dim=-1)
+    q = q.reshape(B, L, H, hd).transpose(1, 2)
+    k = k.reshape(B, L, H, hd).transpose(1, 2)
+    v = v.reshape(B, L, H, hd).transpose(1, 2)
+    scores = torch.matmul(q, k.transpose(-1, -2)) / math.sqrt(hd)
+    scores = scores.masked_fill(pad[:, None, None, :], -1e4)
+    attn = torch.softmax(scores, dim=-1)
+    out = torch.matmul(attn, v).transpose(1, 2).reshape(B, L, D)
+    return mha.out_proj(out)
+
+
+def _manual_encoder_layer(layer: nn.TransformerEncoderLayer, x: torch.Tensor, pad: torch.Tensor) -> torch.Tensor:
+    """Pre-norm (`norm_first=True`) encoder layer in plain ops; see `_manual_self_attention`."""
+    a = _manual_self_attention(layer.self_attn, layer.norm1(x), pad)
+    x = x + layer.dropout1(a)
+    f = layer.linear2(layer.dropout(layer.activation(layer.linear1(layer.norm2(x)))))
+    return x + layer.dropout2(f)
+
+
 class DecisionModel(nn.Module):
     """Bidirectional transformer encoder backbone + typed decision head."""
 
@@ -143,6 +173,7 @@ class DecisionModel(nn.Module):
         self.act_head = nn.Sequential(nn.Linear(d + 4, 256), nn.GELU(), nn.Linear(256, n_act))
         self.register_buffer("temperature", torch.ones(3))
         self.head_checkpointing = False
+        self.manual_head_attention = False     # set during ONNX export; see _manual_self_attention
 
     def forward(self, input_ids, attention_mask, marker_pos, marker_mask, qtype, detach_encoder: bool = False):
         h = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
@@ -152,7 +183,10 @@ class DecisionModel(nn.Module):
         if self.head is not None:
             pad = ~attention_mask.bool()
             for layer in self.head.layers:
-                h = layer(h, src_key_padding_mask=pad)
+                if self.manual_head_attention:
+                    h = _manual_encoder_layer(layer, h, pad)
+                else:
+                    h = layer(h, src_key_padding_mask=pad)
         idx = marker_pos.clamp(min=0)[:, :, None].expand(-1, -1, h.size(-1))
         m = torch.gather(h, 1, idx)
         logits = self.scorer(m).squeeze(-1).float()
