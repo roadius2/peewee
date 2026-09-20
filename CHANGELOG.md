@@ -42,6 +42,11 @@ upstream v0.3.4 (`d113dca`).
   `scripts/gpu_validate.py`. Not yet loaded by default.
 
 ### Fixed
+- `OnnxAgent` no longer drops to CPU quietly. An explicit `providers` list naming a provider the
+  runtime lacks raises at construction, and the automatic choice logs a warning when torch can see
+  a CUDA device but the installed `onnxruntime` wheel has no CUDA provider. The service maps
+  `LAYA_DEVICE` onto the ONNX backend (`providers_for_device`), so `LAYA_DEVICE=cuda` with
+  `LAYA_BACKEND=onnx` fails at startup instead of serving from CPU.
 - `export_onnx` moved the caller's model to fp32 on CPU for tracing and left it there, so the
   next `predict` on a CUDA agent failed with a device mismatch. The model is moved back to its
   original device and dtype after export (found on the first real GPU run).

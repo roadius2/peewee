@@ -111,12 +111,30 @@ def export_onnx(agent: Agent, out_dir: str, quantize: bool = False, opset: int =
 
 
 # ------------------------------------------------------------------------------ runtime
+def providers_for_device(device: Optional[str]) -> Optional[List[str]]:
+    """Map a torch-style device string to an explicit ONNX Runtime provider list.
+
+    `None` keeps the automatic choice (CUDA when the runtime has it, else CPU).
+    """
+    if device is None:
+        return None
+    d = str(device).lower()
+    if d.startswith("cuda"):
+        return ["CUDAExecutionProvider"]
+    if d == "cpu":
+        return ["CPUExecutionProvider"]
+    raise ValueError("unsupported ONNX device %r; use cuda, cpu or None" % device)
+
+
 class OnnxAgent(Agent):
     """`Agent` whose forward pass runs in ONNX Runtime. Same `predict` / `predict_many` API.
 
     `path` is an export directory from `export_onnx`. Prefers `model.int8.onnx` when present
     unless `prefer_quantized=False`. `providers` defaults to CUDA when the runtime has it, then
-    CPU. `threads` sets intra-op parallelism (0 = runtime default).
+    CPU; that automatic choice logs a warning when torch can see a GPU but the ONNX runtime
+    cannot (the `onnxruntime` wheel instead of `onnxruntime-gpu`). An explicit `providers`
+    list that names a provider the runtime lacks raises, so a service configured for CUDA
+    never quietly runs on CPU. `threads` sets intra-op parallelism (0 = runtime default).
     """
 
     def __init__(self, path: str, calibration: Optional[str] = None, truncate: Optional[str] = None,
@@ -141,6 +159,15 @@ class OnnxAgent(Agent):
         available = ort.get_available_providers()
         if providers is None:
             providers = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in available]
+            if "CUDAExecutionProvider" not in available and torch.cuda.is_available():
+                logger.warning("laya.onnx: torch sees a CUDA device but this onnxruntime build has no "
+                               "CUDAExecutionProvider; running %s on CPU. Install onnxruntime-gpu, or pass "
+                               "providers=['CPUExecutionProvider'] to silence this.", os.path.basename(self.onnx_path))
+        else:
+            missing = [p for p in providers if p not in available]
+            if missing:
+                raise RuntimeError("ONNX Runtime provider(s) %s not available in this build (have %s); "
+                                   "install onnxruntime-gpu for CUDAExecutionProvider" % (missing, available))
         so = ort.SessionOptions()
         if threads:
             so.intra_op_num_threads = int(threads)

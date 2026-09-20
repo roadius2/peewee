@@ -126,3 +126,41 @@ def test_export_restores_model_device(tmp_path):
     export_onnx(a, str(tmp_path / "export"), quantize=False)
     assert next(a.model.parameters()).device.type == a.device.type
     assert a.predict("the customer was charged twice", QS)["answers"]["dept"]["choice"] in QS["dept"]["criteria"]
+
+
+def _exported(tmp_path):
+    from laya.onnx_backend import export_onnx
+    out = str(tmp_path / "export")
+    export_onnx(tiny_agent(tmp_path), out, quantize=False)
+    return out
+
+
+def test_requested_provider_missing_raises(tmp_path, monkeypatch):
+    """An explicit provider that the runtime lacks is a startup error, not a silent CPU run."""
+    import onnxruntime as ort
+    from laya.onnx_backend import OnnxAgent
+    out = _exported(tmp_path)
+    monkeypatch.setattr(ort, "get_available_providers", lambda: ["CPUExecutionProvider"])
+    with pytest.raises(RuntimeError, match="CUDAExecutionProvider"):
+        OnnxAgent(out, tokenizer=TinyTokenizer(), providers=["CUDAExecutionProvider"])
+
+
+def test_auto_provider_warns_when_cuda_is_only_missing_from_onnxruntime(tmp_path, monkeypatch, caplog):
+    import logging
+    import onnxruntime as ort
+    from laya.onnx_backend import OnnxAgent
+    out = _exported(tmp_path)
+    monkeypatch.setattr(ort, "get_available_providers", lambda: ["CPUExecutionProvider"])
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    with caplog.at_level(logging.WARNING, logger="laya.onnx"):
+        o = OnnxAgent(out, tokenizer=TinyTokenizer())
+    assert o.providers == ["CPUExecutionProvider"]
+    assert any("onnxruntime-gpu" in r.getMessage() for r in caplog.records)
+
+
+def test_providers_for_device():
+    from laya.onnx_backend import providers_for_device
+    assert providers_for_device("cuda") == ["CUDAExecutionProvider"]
+    assert providers_for_device("cuda:0") == ["CUDAExecutionProvider"]
+    assert providers_for_device("cpu") == ["CPUExecutionProvider"]
+    assert providers_for_device(None) is None

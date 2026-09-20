@@ -24,7 +24,9 @@ LAYA_WORKERS       inference threads; keep 1 per GPU (default 1)
 LAYA_API_KEY       optional bearer token required on /v1/* endpoints
 LAYA_MAX_STATE_CHARS   reject states longer than this many characters (default 200000)
 LAYA_BACKEND       torch (default) | onnx (see laya.onnx_backend; LAYA_MODELS then names
-                   exported directories: name=path,name=path)
+                   exported directories: name=path,name=path). With onnx, LAYA_DEVICE=cuda
+                   requires the CUDA provider and fails at startup without it; unset, the
+                   backend picks CUDA when available and warns if it has to run on CPU.
 
 Endpoints
 ---------
@@ -347,7 +349,8 @@ def build_router(settings: Settings):
     """Construct and preload the Router the service will run. Split out so tests can stub it."""
     from .router import Router, normalise_name
     if settings.backend == "onnx":
-        from .onnx_backend import OnnxAgent
+        from .onnx_backend import OnnxAgent, providers_for_device
+        providers = providers_for_device(settings.device)
         router = Router(max_loaded=max(2, len(settings.models)), device=settings.device, token=settings.hf_token)
         names = []
         for spec in settings.models:
@@ -355,7 +358,8 @@ def build_router(settings: Settings):
             if not path:
                 raise ValueError("LAYA_BACKEND=onnx needs LAYA_MODELS as name=exported_dir[,name=dir]")
             key = normalise_name(name)
-            router.attach(key, OnnxAgent(path, calibration=settings.calibration_for(key), truncate=settings.truncate))
+            router.attach(key, OnnxAgent(path, calibration=settings.calibration_for(key), truncate=settings.truncate,
+                                         providers=providers))
             names.append(key)
         settings.models = names
         return router
