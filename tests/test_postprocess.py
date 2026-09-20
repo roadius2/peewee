@@ -90,7 +90,8 @@ def test_postprocess_answers(fake_tok):
     assert dept["entropy"] == pytest.approx(normalized_entropy(np.array([0.8808, 0.1192]), 2), abs=1e-3)
 
     urg = out["answers"]["urgency"]
-    p = np.exp(LOGITS[1]); p /= p.sum()
+    p = np.exp(LOGITS[1])
+    p /= p.sum()
     assert urg["score"] == pytest.approx(float((np.arange(3) * p).sum()), abs=1e-3)
     assert urg["level"] == 2
     assert urg["confidence"] == pytest.approx(float(p.max()), abs=1e-3)
