@@ -1,0 +1,11 @@
+ultra_laya
+Copyright 2026 roadius2 and contributors
+
+This product is a fork of Laya (https://github.com/NandhaKishorM/laya),
+Copyright Convai Innovations / Nandakishor M, licensed under the
+Apache License, Version 2.0. The original commit history, LICENSE and
+model checkpoints (https://huggingface.co/convaiinnovations/laya) remain
+the work of the original authors.
+
+Changes in this fork are listed in CHANGELOG.md. Where a change ports an
+upstream pull request, the changelog and commit message name its author.

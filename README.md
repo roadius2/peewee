@@ -5,6 +5,10 @@
   </picture>
 </p>
 
+> **ultra_laya** is a fork of [Laya](https://github.com/NandhaKishorM/laya) by Convai Innovations
+> (Apache 2.0), with the full upstream history. See `NOTICE`, `CHANGELOG.md` for what this fork
+> changes, and `REVIEW.md` for the plan.
+
 **Multilingual, non-autoregressive System 1 decision engine.** Typed decisions over 100+ languages in a single forward pass — 33 ms — trained with reinforcement learning against strictly proper scoring rules (RLCD), with a router that picks the right checkpoint per request.
 
 <div align="center">
