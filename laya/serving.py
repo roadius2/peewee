@@ -175,22 +175,27 @@ class Metrics:
 class DynamicBatcher:
     """Collect requests for one agent and answer them in shared forward passes.
 
-    Requests are `(state, questions, truncate)`. A flush happens when the queued question count
-    reaches `max_batch` or `max_wait` seconds after the first request of the batch, whichever
-    comes first. Inference runs in `executor` so the event loop keeps accepting requests.
+    Requests are `(state, questions, truncate)`. While the agent is idle, a flush happens when
+    the queued question count reaches `max_batch` or `max_wait` seconds after the first request,
+    whichever comes first. While a forward pass is running (up to `max_inflight` of them, one per
+    inference worker), arrivals accumulate and go out together the moment a pass finishes, so
+    under load the batch grows to whatever queued instead of the timer slicing it into many
+    small passes. Inference runs in `executor` so the event loop keeps accepting requests.
     """
 
     def __init__(self, name: str, agent: Any, executor: ThreadPoolExecutor, max_batch: int = 32,
-                 max_wait: float = 0.005, metrics: Optional[Metrics] = None):
+                 max_wait: float = 0.005, metrics: Optional[Metrics] = None, max_inflight: int = 1):
         self.name = name
         self.agent = agent
         self.executor = executor
         self.max_batch = max(1, int(max_batch))
         self.max_wait = max(0.0, float(max_wait))
+        self.max_inflight = max(1, int(max_inflight))
         self.metrics = metrics or Metrics()
         self._queue: List[Tuple[Any, Dict[str, Any], Optional[str], "asyncio.Future"]] = []
         self._queued_questions = 0
         self._flush_task: Optional[asyncio.Task] = None
+        self._inflight = 0
         self._lock = asyncio.Lock()
         self.batches = 0
 
@@ -205,7 +210,9 @@ class DynamicBatcher:
             self._queue.append((state, questions, truncate, fut))
             self._queued_questions += max(1, len(questions))
             self.metrics.queue(self.name, len(self._queue))
-            if self._queued_questions >= self.max_batch:
+            if self._inflight >= self.max_inflight:
+                pass                                # a running pass drains us when it finishes
+            elif self._queued_questions >= self.max_batch:
                 self._schedule_flush(0.0)
             elif self._flush_task is None:
                 self._schedule_flush(self.max_wait)
@@ -226,9 +233,16 @@ class DynamicBatcher:
             batch, self._queue = self._queue, []
             self._queued_questions = 0
             self._flush_task = None
+            self._inflight += 1
             self.metrics.queue(self.name, 0)
-        if batch:
-            await self._run(batch)
+        try:
+            if batch:
+                await self._run(batch)
+        finally:
+            async with self._lock:
+                self._inflight -= 1
+                if self._queue and self._flush_task is None:
+                    self._schedule_flush(0.0)       # drain what arrived while we were busy
 
     async def _run(self, batch):
         loop = asyncio.get_running_loop()
@@ -286,7 +300,8 @@ class DecisionService:
             if b is None:
                 agent = self.router.load(name)
                 b = DynamicBatcher(name, agent, self.executor, self.settings.max_batch,
-                                   self.settings.max_wait_ms / 1000.0, self.metrics)
+                                   self.settings.max_wait_ms / 1000.0, self.metrics,
+                                   max_inflight=max(1, self.settings.workers))
                 self._batchers[name] = b
             return b
 

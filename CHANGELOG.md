@@ -42,6 +42,12 @@ upstream v0.3.4 (`d113dca`).
   `scripts/gpu_validate.py`. Not yet loaded by default.
 
 ### Fixed
+- `DynamicBatcher` now batches under load. Flushes were purely timer-driven (`LAYA_MAX_WAIT_MS`
+  after the first queued request), so once the inference worker was busy the timer kept slicing
+  the queue into passes of one or two requests that then waited behind each other. Arrivals now
+  accumulate while a pass runs (one per `LAYA_WORKERS`) and go out together the moment it
+  finishes. On an RTX 5090 with 32 concurrent clients this took the service from 467 to 1,338
+  questions/s and p50 from 229 to 77 ms; numbers in `BENCHMARKS.md`.
 - `--quantize` now writes a weight-only int8 export (`MatMulNBits` on the encoder's linear
   weights, activations and the decision head in fp32). The previous dynamic int8 recipe broke the
   GeGLU feed-forward blocks on the real checkpoints: probabilities moved by up to 0.91 and 13 to

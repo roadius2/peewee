@@ -328,9 +328,10 @@ Carried over from the first two development sessions; see `reports/trinity-prime
   `calibration/english.json` (T = 2.44) are committed. They only cover the 11+ option bucket,
   so wiring them in `Agent._init_common` is a product decision for the owner.
 - **Phase 3 needs longer inputs** before a decision; see the Phase 3 status note above.
-- **Docker images were written without being built**; expect a first build to need a tag or
-  wheel-index adjustment. The CPU image with `LAYA_BACKEND=onnx` plus `scripts/loadtest.py`
-  is the next throughput measurement, using the fp32 export.
+- **The CPU Docker image builds and serves as written** (1.38 GB, `python:3.11-slim`, CPU torch
+  plus the server and onnx extras); the CUDA image is still unbuilt. Throughput is in
+  `BENCHMARKS.md` under "Decision service throughput": about 40 questions/s on 8 CPU cores
+  against about 1,400 on the 5090, so CPU serving is for low-volume or edge use only.
 - `act_probability` in answers comes from an "action head" whose meaning is undocumented
   upstream; it is passed through untouched. Decide whether to document or drop it.
 - The language guess is a heuristic tuned on a small regression set in `tests/test_lang.py`.
