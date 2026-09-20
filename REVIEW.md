@@ -308,3 +308,35 @@ tool outputs, and compare accuracy at 1,024 against 2,048 and 4,096 on that subs
 - Seeded `ultra_laya` with the full upstream history (50 commits) so upstream fixes can be
   merged later with `git merge`.
 - Added this review. No library code was changed.
+
+---
+
+## 7. Open questions after the first GPU validation (2026-09-20)
+
+Carried over from the first two development sessions; see `reports/trinity-prime-20260920/`.
+
+- **int8 ONNX is unusable as exported.** Dynamic weight-only quantisation of the whole graph
+  moves probabilities by up to 0.91 and flips 13 to 30% of argmaxes on all three checkpoints,
+  while fp32 ONNX matches torch exactly. Do not ship `--quantize` output; try excluding the
+  decision head and embeddings from quantisation, or static quantisation with calibration data.
+- **Fitted temperatures are not wired as defaults.** `calibration/multilingual.json` (T = 2.07
+  for the `choice:11+` bucket, fit on 438 MASSIVE examples, held-out ECE 0.37 to 0.13) and
+  `calibration/english.json` (T = 2.44) are committed. They only cover the 11+ option bucket,
+  so wiring them in `Agent._init_common` is a product decision for the owner.
+- **Phase 3 needs longer inputs** before a decision; see the Phase 3 status note above.
+- **Docker images were written without being built**; expect a first build to need a tag or
+  wheel-index adjustment. The CPU image with `LAYA_BACKEND=onnx` plus `scripts/loadtest.py`
+  is the next throughput measurement, using the fp32 export.
+- `act_probability` in answers comes from an "action head" whose meaning is undocumented
+  upstream; it is passed through untouched. Decide whether to document or drop it.
+- The language guess is a heuristic tuned on a small regression set in `tests/test_lang.py`.
+  Quebec French traffic is the motivating case; extend the tests with real samples before
+  tuning further, and prefer plugging in a real detector for production.
+- `hierarchical_choice` multiplies the two stages' top probabilities as the path confidence;
+  it is not calibrated as a whole.
+- The service's `/v1/decide/batch` returns per-item errors inline with HTTP 200; a client that
+  wants strict semantics should use `/v1/decide`.
+- Upstream `NandhaKishorM/laya` has a single maintainer and a large unreviewed PR backlog.
+  Work on the fork; mine upstream PRs for ideas (#19 calibration and #27 preload are ported,
+  #18 head-budget and #3 server were references). The transformers-floor fix and the router
+  tuple fix would be easy PRs to send upstream.

@@ -29,6 +29,9 @@ upstream v0.3.4 (`d113dca`).
   `export-onnx`).
 
 ### Changed
+- Session notes left the repo: the hand-off document and bootstrap script are gone, Claude's
+  project instructions and permissions are git-ignored local files, and the open questions moved
+  to `REVIEW.md` section 7. CI now also runs on pushes to `claude/main`.
 - `Agent.__init__` is split into `resolve_checkpoint` (locate/download, load config) and
   `Agent._init_common` (tokenizer, temperatures, truncation default) so alternative backends
   reuse them. `Agent.model_dir` records where the checkpoint was loaded from.

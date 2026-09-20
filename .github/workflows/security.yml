@@ -3,7 +3,7 @@ name: Security
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, claude/main]
   schedule:
     - cron: "17 6 * * 1"     # Monday morning: catch CVEs disclosed since the last push
 

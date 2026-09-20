@@ -48,6 +48,7 @@ credentials.json
 
 # per-machine Claude Code settings
 .claude/settings.local.json
+CLAUDE.local.md
 
 # local validation outputs (report.md and calibration/*.json are committed by hand)
 reports/*/onnx/
