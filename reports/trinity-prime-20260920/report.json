@@ -5,7 +5,7 @@
     "torch": "2.11.0+cu128",
     "laya": "0.4.0.dev0",
     "cuda": true,
-    "date": "2026-09-20 20:59"
+    "date": "2026-09-20 21:55"
   },
   "args": {
     "out": "reports/trinity-prime-20260920",
@@ -20,9 +20,9 @@
     "english": {
       "load": {
         "ok": true,
-        "seconds": 7.0,
+        "seconds": 4.1,
         "result": {
-          "load_seconds": 6.7,
+          "load_seconds": 3.8,
           "device": "cuda",
           "dtype": "torch.bfloat16",
           "fell_back_to_cpu": false,
@@ -144,49 +144,49 @@
       },
       "latency": {
         "ok": true,
-        "seconds": 2.1,
+        "seconds": 2.0,
         "result": {
           "questions_1": {
-            "p50_ms": 6.86,
-            "mean_ms": 6.86,
-            "min_ms": 6.8,
+            "p50_ms": 6.76,
+            "mean_ms": 6.76,
+            "min_ms": 6.72,
             "n": 10
           },
           "questions_5": {
-            "p50_ms": 9.8,
-            "mean_ms": 9.85,
-            "min_ms": 9.73,
+            "p50_ms": 9.74,
+            "mean_ms": 9.74,
+            "min_ms": 9.72,
             "n": 10
           },
           "questions_10": {
-            "p50_ms": 12.93,
-            "mean_ms": 12.94,
-            "min_ms": 12.91,
+            "p50_ms": 12.88,
+            "mean_ms": 12.89,
+            "min_ms": 12.86,
             "n": 10
           },
           "questions_50": {
-            "p50_ms": 47.69,
-            "mean_ms": 47.13,
-            "min_ms": 43.86,
+            "p50_ms": 43.76,
+            "mean_ms": 43.76,
+            "min_ms": 43.7,
             "n": 10
           },
           "predict_many_32x5": {
-            "p50_ms": 164.47,
-            "mean_ms": 164.55,
-            "min_ms": 164.27,
+            "p50_ms": 162.61,
+            "mean_ms": 162.62,
+            "min_ms": 162.54,
             "n": 5,
-            "per_question_ms": 1.028
+            "per_question_ms": 1.016
           }
         }
       },
       "onnx": {
         "ok": true,
-        "seconds": 44.9,
+        "seconds": 29.7,
         "result": {
           "export": {
             "opset": 17,
             "quantized": true,
-            "export_seconds": 9.09,
+            "export_seconds": 4.73,
             "encoder": "answerdotai/ModernBERT-large",
             "torch": "2.11.0+cu128",
             "inputs": [
@@ -200,7 +200,8 @@
               "logits",
               "act_logits"
             ],
-            "quantize_seconds": 3.83
+            "quantize_seconds": 1.39,
+            "quantization": "weight-only int8 (MatMulNBits, block 128, symmetric); encoder MatMul weights only, decision head and attention products fp32"
           },
           "fp32": {
             "model": "model.onnx",
@@ -211,15 +212,15 @@
             "mean_abs_prob_diff": 0.00241,
             "argmax_agreement": 1.0,
             "latency_1q": {
-              "p50_ms": 203.86,
-              "mean_ms": 239.24,
-              "min_ms": 180.87,
+              "p50_ms": 63.66,
+              "mean_ms": 66.34,
+              "min_ms": 62.49,
               "n": 10
             },
             "latency_5q": {
-              "p50_ms": 718.62,
-              "mean_ms": 751.2,
-              "min_ms": 567.29,
+              "p50_ms": 234.31,
+              "mean_ms": 241.17,
+              "min_ms": 227.94,
               "n": 10
             }
           },
@@ -228,19 +229,19 @@
             "providers": [
               "CPUExecutionProvider"
             ],
-            "max_abs_prob_diff": 0.914,
-            "mean_abs_prob_diff": 0.14418,
-            "argmax_agreement": 0.7667,
+            "max_abs_prob_diff": 0.053,
+            "mean_abs_prob_diff": 0.00496,
+            "argmax_agreement": 1.0,
             "latency_1q": {
-              "p50_ms": 34.84,
-              "mean_ms": 61.68,
-              "min_ms": 25.65,
+              "p50_ms": 87.13,
+              "mean_ms": 93.54,
+              "min_ms": 85.0,
               "n": 10
             },
             "latency_5q": {
-              "p50_ms": 97.56,
-              "mean_ms": 100.51,
-              "min_ms": 93.56,
+              "p50_ms": 280.43,
+              "mean_ms": 284.19,
+              "min_ms": 264.77,
               "n": 10
             }
           }
@@ -248,7 +249,7 @@
       },
       "calibrate": {
         "ok": true,
-        "seconds": 2.6,
+        "seconds": 2.8,
         "result": {
           "fit": {
             "temperature": [
@@ -322,7 +323,7 @@
         "ok": true,
         "seconds": 3.3,
         "result": {
-          "load_seconds": 3.3,
+          "load_seconds": 3.2,
           "device": "cuda",
           "dtype": "torch.bfloat16",
           "fell_back_to_cpu": false,
@@ -440,46 +441,46 @@
         "seconds": 1.0,
         "result": {
           "questions_1": {
-            "p50_ms": 5.7,
-            "mean_ms": 5.71,
-            "min_ms": 5.69,
+            "p50_ms": 5.63,
+            "mean_ms": 5.63,
+            "min_ms": 5.6,
             "n": 10
           },
           "questions_5": {
-            "p50_ms": 6.4,
-            "mean_ms": 6.4,
-            "min_ms": 6.38,
+            "p50_ms": 6.31,
+            "mean_ms": 6.33,
+            "min_ms": 6.29,
             "n": 10
           },
           "questions_10": {
-            "p50_ms": 8.38,
+            "p50_ms": 8.37,
             "mean_ms": 8.38,
-            "min_ms": 8.37,
+            "min_ms": 8.34,
             "n": 10
           },
           "questions_50": {
-            "p50_ms": 22.69,
-            "mean_ms": 22.74,
-            "min_ms": 22.63,
+            "p50_ms": 22.64,
+            "mean_ms": 22.63,
+            "min_ms": 22.57,
             "n": 10
           },
           "predict_many_32x5": {
-            "p50_ms": 67.51,
-            "mean_ms": 67.5,
-            "min_ms": 67.44,
+            "p50_ms": 67.27,
+            "mean_ms": 67.28,
+            "min_ms": 67.19,
             "n": 5,
-            "per_question_ms": 0.422
+            "per_question_ms": 0.42
           }
         }
       },
       "onnx": {
         "ok": true,
-        "seconds": 29.2,
+        "seconds": 16.7,
         "result": {
           "export": {
             "opset": 17,
             "quantized": true,
-            "export_seconds": 3.8,
+            "export_seconds": 3.55,
             "encoder": "jhu-clsp/mmBERT-base",
             "torch": "2.11.0+cu128",
             "inputs": [
@@ -493,7 +494,8 @@
               "logits",
               "act_logits"
             ],
-            "quantize_seconds": 3.98
+            "quantize_seconds": 1.14,
+            "quantization": "weight-only int8 (MatMulNBits, block 128, symmetric); encoder MatMul weights only, decision head and attention products fp32"
           },
           "fp32": {
             "model": "model.onnx",
@@ -504,15 +506,15 @@
             "mean_abs_prob_diff": 0.00098,
             "argmax_agreement": 1.0,
             "latency_1q": {
-              "p50_ms": 79.39,
-              "mean_ms": 88.02,
-              "min_ms": 75.38,
+              "p50_ms": 26.02,
+              "mean_ms": 26.16,
+              "min_ms": 25.63,
               "n": 10
             },
             "latency_5q": {
-              "p50_ms": 278.58,
-              "mean_ms": 321.25,
-              "min_ms": 195.3,
+              "p50_ms": 89.88,
+              "mean_ms": 92.05,
+              "min_ms": 87.07,
               "n": 10
             }
           },
@@ -521,19 +523,19 @@
             "providers": [
               "CPUExecutionProvider"
             ],
-            "max_abs_prob_diff": 0.9143,
-            "mean_abs_prob_diff": 0.08169,
-            "argmax_agreement": 0.8667,
+            "max_abs_prob_diff": 0.0384,
+            "mean_abs_prob_diff": 0.00298,
+            "argmax_agreement": 1.0,
             "latency_1q": {
-              "p50_ms": 36.67,
-              "mean_ms": 31.18,
-              "min_ms": 17.4,
+              "p50_ms": 32.84,
+              "mean_ms": 35.04,
+              "min_ms": 32.53,
               "n": 10
             },
             "latency_5q": {
-              "p50_ms": 60.17,
-              "mean_ms": 60.73,
-              "min_ms": 59.61,
+              "p50_ms": 95.67,
+              "mean_ms": 100.04,
+              "min_ms": 94.32,
               "n": 10
             }
           }
@@ -541,7 +543,7 @@
       },
       "calibrate": {
         "ok": true,
-        "seconds": 1.6,
+        "seconds": 1.7,
         "result": {
           "fit": {
             "temperature": [
@@ -611,7 +613,7 @@
       },
       "lengths": {
         "ok": true,
-        "seconds": 15.0,
+        "seconds": 14.9,
         "result": {
           "trained_max_len": 1024,
           "n": 300,
@@ -676,9 +678,9 @@
     "typed-decisions": {
       "load": {
         "ok": true,
-        "seconds": 5.7,
+        "seconds": 2.7,
         "result": {
-          "load_seconds": 5.6,
+          "load_seconds": 2.6,
           "device": "cuda",
           "dtype": "torch.bfloat16",
           "fell_back_to_cpu": false,
@@ -800,49 +802,49 @@
       },
       "latency": {
         "ok": true,
-        "seconds": 2.1,
+        "seconds": 2.0,
         "result": {
           "questions_1": {
-            "p50_ms": 6.93,
-            "mean_ms": 6.94,
-            "min_ms": 6.92,
+            "p50_ms": 6.88,
+            "mean_ms": 6.88,
+            "min_ms": 6.84,
             "n": 10
           },
           "questions_5": {
-            "p50_ms": 9.88,
-            "mean_ms": 9.88,
-            "min_ms": 9.85,
+            "p50_ms": 9.89,
+            "mean_ms": 9.9,
+            "min_ms": 9.87,
             "n": 10
           },
           "questions_10": {
-            "p50_ms": 13.12,
-            "mean_ms": 13.12,
-            "min_ms": 13.09,
+            "p50_ms": 13.1,
+            "mean_ms": 13.1,
+            "min_ms": 13.07,
             "n": 10
           },
           "questions_50": {
-            "p50_ms": 44.47,
-            "mean_ms": 44.49,
-            "min_ms": 44.36,
+            "p50_ms": 44.21,
+            "mean_ms": 44.23,
+            "min_ms": 44.18,
             "n": 10
           },
           "predict_many_32x5": {
-            "p50_ms": 166.39,
-            "mean_ms": 166.57,
-            "min_ms": 166.03,
+            "p50_ms": 164.54,
+            "mean_ms": 164.61,
+            "min_ms": 164.33,
             "n": 5,
-            "per_question_ms": 1.04
+            "per_question_ms": 1.028
           }
         }
       },
       "onnx": {
         "ok": true,
-        "seconds": 40.1,
+        "seconds": 28.8,
         "result": {
           "export": {
             "opset": 17,
             "quantized": true,
-            "export_seconds": 9.68,
+            "export_seconds": 3.97,
             "encoder": "answerdotai/ModernBERT-large",
             "torch": "2.11.0+cu128",
             "inputs": [
@@ -856,7 +858,8 @@
               "logits",
               "act_logits"
             ],
-            "quantize_seconds": 4.1
+            "quantize_seconds": 1.33,
+            "quantization": "weight-only int8 (MatMulNBits, block 128, symmetric); encoder MatMul weights only, decision head and attention products fp32"
           },
           "fp32": {
             "model": "model.onnx",
@@ -867,15 +870,15 @@
             "mean_abs_prob_diff": 0.00141,
             "argmax_agreement": 1.0,
             "latency_1q": {
-              "p50_ms": 94.76,
-              "mean_ms": 96.87,
-              "min_ms": 63.03,
+              "p50_ms": 63.75,
+              "mean_ms": 70.06,
+              "min_ms": 62.37,
               "n": 10
             },
             "latency_5q": {
-              "p50_ms": 722.11,
-              "mean_ms": 692.62,
-              "min_ms": 399.06,
+              "p50_ms": 238.35,
+              "mean_ms": 244.03,
+              "min_ms": 227.12,
               "n": 10
             }
           },
@@ -884,19 +887,19 @@
             "providers": [
               "CPUExecutionProvider"
             ],
-            "max_abs_prob_diff": 0.6941,
-            "mean_abs_prob_diff": 0.09116,
-            "argmax_agreement": 0.7,
+            "max_abs_prob_diff": 0.0192,
+            "mean_abs_prob_diff": 0.00297,
+            "argmax_agreement": 0.9667,
             "latency_1q": {
-              "p50_ms": 36.93,
-              "mean_ms": 40.36,
-              "min_ms": 35.87,
+              "p50_ms": 86.88,
+              "mean_ms": 88.93,
+              "min_ms": 84.84,
               "n": 10
             },
             "latency_5q": {
-              "p50_ms": 146.35,
-              "mean_ms": 141.65,
-              "min_ms": 96.2,
+              "p50_ms": 307.43,
+              "mean_ms": 306.22,
+              "min_ms": 272.23,
               "n": 10
             }
           }
@@ -904,7 +907,7 @@
       },
       "lengths": {
         "ok": true,
-        "seconds": 19.9,
+        "seconds": 19.7,
         "result": {
           "trained_max_len": 1024,
           "n": 300,

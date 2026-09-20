@@ -1,10 +1,10 @@
 # GPU validation report
 
-host: `trinity-prime`  python: 3.13.7  torch: 2.11.0+cu128  laya: 0.4.0.dev0  date: 2026-09-20 20:59
+host: `trinity-prime`  python: 3.13.7  torch: 2.11.0+cu128  laya: 0.4.0.dev0  date: 2026-09-20 21:55
 
 ## english
 
-- load: 6.7s on cuda (torch.bfloat16), 421,293,827 params, 1607 MB VRAM, NVIDIA GeForce RTX 5090
+- load: 3.8s on cuda (torch.bfloat16), 421,293,827 params, 1607 MB VRAM, NVIDIA GeForce RTX 5090
 
 | state | intent | conf | frustration | churn | truncated |
 |---|---|---|---|---|---|
@@ -17,16 +17,16 @@ host: `trinity-prime`  python: 3.13.7  torch: 2.11.0+cu128  laya: 0.4.0.dev0  da
 
 | questions per call | p50 ms |
 |---|---|
-| questions_1 | 6.9 |
-| questions_5 | 9.8 |
+| questions_1 | 6.8 |
+| questions_5 | 9.7 |
 | questions_10 | 12.9 |
-| questions_50 | 47.7 |
-| predict_many_32x5 | 164.5 (1.03/question) |
+| questions_50 | 43.8 |
+| predict_many_32x5 | 162.6 (1.02/question) |
 
 | onnx | max abs prob diff | argmax agreement | 1q p50 ms (CPU) | 5q p50 ms (CPU) |
 |---|---|---|---|---|
-| fp32 | 0.0195 | 1.000 | 203.9 | 718.6 |
-| int8 | 0.9140 | 0.767 | 34.8 | 97.6 |
+| fp32 | 0.0195 | 1.000 | 63.7 | 234.3 |
+| int8 | 0.0530 | 1.000 | 87.1 | 280.4 |
 
 - calibration fit on {'choice:11+': 438} examples; held-out ECE 0.344 -> 0.088, NLL 2.964 -> 2.188, accuracy 0.359
 - per-locale accuracy: {"en-US": 0.622, "fr-FR": 0.444, "de-DE": 0.256, "es-ES": 0.4, "hi-IN": 0.067, "ja-JP": 0.367}
@@ -34,7 +34,7 @@ host: `trinity-prime`  python: 3.13.7  torch: 2.11.0+cu128  laya: 0.4.0.dev0  da
 
 ## multilingual
 
-- load: 3.3s on cuda (torch.bfloat16), 321,908,995 params, 1256 MB VRAM, NVIDIA GeForce RTX 5090
+- load: 3.2s on cuda (torch.bfloat16), 321,908,995 params, 1256 MB VRAM, NVIDIA GeForce RTX 5090
 
 | state | intent | conf | frustration | churn | truncated |
 |---|---|---|---|---|---|
@@ -47,16 +47,16 @@ host: `trinity-prime`  python: 3.13.7  torch: 2.11.0+cu128  laya: 0.4.0.dev0  da
 
 | questions per call | p50 ms |
 |---|---|
-| questions_1 | 5.7 |
-| questions_5 | 6.4 |
+| questions_1 | 5.6 |
+| questions_5 | 6.3 |
 | questions_10 | 8.4 |
-| questions_50 | 22.7 |
-| predict_many_32x5 | 67.5 (0.42/question) |
+| questions_50 | 22.6 |
+| predict_many_32x5 | 67.3 (0.42/question) |
 
 | onnx | max abs prob diff | argmax agreement | 1q p50 ms (CPU) | 5q p50 ms (CPU) |
 |---|---|---|---|---|
-| fp32 | 0.0099 | 1.000 | 79.4 | 278.6 |
-| int8 | 0.9143 | 0.867 | 36.7 | 60.2 |
+| fp32 | 0.0099 | 1.000 | 26.0 | 89.9 |
+| int8 | 0.0384 | 1.000 | 32.8 | 95.7 |
 
 - calibration fit on {'choice:11+': 438} examples; held-out ECE 0.373 -> 0.130, NLL 2.476 -> 1.803, accuracy 0.435
 - per-locale accuracy: {"en-US": 0.467, "fr-FR": 0.4, "de-DE": 0.422, "es-ES": 0.4, "hi-IN": 0.433, "ja-JP": 0.489}
@@ -77,7 +77,7 @@ host: `trinity-prime`  python: 3.13.7  torch: 2.11.0+cu128  laya: 0.4.0.dev0  da
 
 ## typed-decisions
 
-- load: 5.6s on cuda (torch.bfloat16), 421,293,827 params, 1617 MB VRAM, NVIDIA GeForce RTX 5090
+- load: 2.6s on cuda (torch.bfloat16), 421,293,827 params, 1617 MB VRAM, NVIDIA GeForce RTX 5090
 
 | state | intent | conf | frustration | churn | truncated |
 |---|---|---|---|---|---|
@@ -93,13 +93,13 @@ host: `trinity-prime`  python: 3.13.7  torch: 2.11.0+cu128  laya: 0.4.0.dev0  da
 | questions_1 | 6.9 |
 | questions_5 | 9.9 |
 | questions_10 | 13.1 |
-| questions_50 | 44.5 |
-| predict_many_32x5 | 166.4 (1.04/question) |
+| questions_50 | 44.2 |
+| predict_many_32x5 | 164.5 (1.03/question) |
 
 | onnx | max abs prob diff | argmax agreement | 1q p50 ms (CPU) | 5q p50 ms (CPU) |
 |---|---|---|---|---|
-| fp32 | 0.0082 | 1.000 | 94.8 | 722.1 |
-| int8 | 0.6941 | 0.700 | 36.9 | 146.3 |
+| fp32 | 0.0082 | 1.000 | 63.8 | 238.3 |
+| int8 | 0.0192 | 0.967 | 86.9 | 307.4 |
 
 - IMDB review tokens p50 215, p90 485, max 1291; trained max_len 1024
 
