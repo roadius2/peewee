@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest*)",
+      "Bash(python3 -m pytest*)",
+      "Bash(ruff check*)",
+      "Bash(python -m compileall*)",
+      "Bash(python -m build*)",
+      "Bash(pip install -e*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git fetch*)",
+      "Bash(laya --help)",
+      "Bash(laya serve --help)",
+      "Bash(laya export-onnx --help)",
+      "Bash(python scripts/gpu_validate.py*)",
+      "Bash(python scripts/loadtest.py*)",
+      "Bash(nvidia-smi*)"
+    ]
+  }
+}
