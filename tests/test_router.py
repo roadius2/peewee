@@ -143,22 +143,29 @@ def test_standalone_and_local_overrides():
 # ------------------------------------------------------------------ residency / LRU
 def test_default_keeps_two_resident(stub_build):
     r = Router()
-    r.load("english"); r.load("multilingual")
+    r.load("english")
+    r.load("multilingual")
     assert sorted(r.loaded) == ["english", "multilingual"]
     assert stub_build == ["english", "multilingual"]
 
 
 def test_lru_eviction(stub_build):
     r = Router(max_loaded=1)
-    r.load("english"); r.load("multilingual")
+    r.load("english")
+    r.load("multilingual")
     assert r.loaded == ["multilingual"] and sorted(r._agents) == ["multilingual"]
 
     r = Router(max_loaded=2)
-    r.load("english"); r.load("multilingual"); r.load("typed-decisions")
+    r.load("english")
+    r.load("multilingual")
+    r.load("typed-decisions")
     assert r.loaded == ["multilingual", "typed-decisions"]
 
     r = Router(max_loaded=2)
-    r.load("english"); r.load("multilingual"); r.load("english"); r.load("typed-decisions")
+    r.load("english")
+    r.load("multilingual")
+    r.load("english")
+    r.load("typed-decisions")
     assert sorted(r.loaded) == ["english", "typed-decisions"]
 
     r.unload("english")

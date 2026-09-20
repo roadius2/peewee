@@ -223,7 +223,7 @@ context problem. Phase 4 is where the accuracy comes from.
   `build_sequence`, truncation and post-processing run in CI without weights.
 - Replace `print` with `logging`.
 
-### Phase 1: make it safe to gate on
+### Phase 1: make it safe to gate on — done except shipping fitted multilingual temperatures (needs the weights), see `CHANGELOG.md`
 - **Truncation reporting.** `build_sequence` returns how many state tokens were dropped;
   `usage` gains `state_tokens`, `state_tokens_dropped`, `truncated: bool`. Add a
   `truncate="right"|"left"` argument to `predict` and default agent-style states (a list of

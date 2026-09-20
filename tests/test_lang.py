@@ -54,16 +54,66 @@ def test_guess_latin_language(text, want):
     assert guess_latin_language(text) == want
 
 
-# Known gap, tracked for Phase 1: short non-English Latin text is still routed as English.
-@pytest.mark.xfail(reason="Phase 1: short French/Spanish/German sentences still look English", strict=True)
-@pytest.mark.parametrize("text", [
-    "Je veux annuler mon forfait",
-    "Mon compte ne marche pas",
-    "Necesito cancelar mi cuenta hoy",
-    "Ich kann mich nicht einloggen",
+# Short support-style messages in Latin-script languages must not reach the English checkpoint.
+@pytest.mark.parametrize("text, lang", [
+    ("Je veux annuler mon forfait", "fr"),
+    ("Mon compte ne marche pas", "fr"),
+    ("Bonjour, je n'arrive pas à me connecter à mon compte depuis hier", "fr"),
+    ("Pouvez-vous me rappeler demain matin?", "fr"),
+    ("Merci beaucoup", "fr"),
+    ("Necesito cancelar mi cuenta hoy", "es"),
+    ("Muchas gracias por su ayuda con la factura", "es"),
+    ("Hola, no puedo entrar", "es"),
+    ("Ich kann mich nicht einloggen", "de"),
+    ("Danke schön", "de"),
+    ("Mein Konto wurde zweimal belastet", "de"),
+    ("Não consigo aceder à minha conta", "pt"),
+    ("Non riesco ad accedere al mio account", "it"),
+    ("Ik kan niet inloggen", "nl"),
 ])
-def test_short_non_english_latin(text):
+def test_short_non_english_latin(text, lang):
     assert is_english(text) is False
+    assert guess_latin_language(text) == lang
+
+
+# ...and ordinary short English must not be pushed off the English checkpoint either, even
+# when it contains words that double as function words elsewhere ("me", "no", "a", "la").
+@pytest.mark.parametrize("text", [
+    "refund me",
+    "no problem",
+    "call me back tomorrow",
+    "is it done yet",
+    "on my way",
+    "the invoice is late",
+    "a la carte menu please",
+    "no, send me the invoice",
+    "can you help me with my account",
+    "I need to cancel my plan today",
+    "ok",
+    "thanks!",
+])
+def test_short_english_stays_english(text):
+    assert is_english(text) is True
+
+
+def test_external_detector_hook():
+    from laya.lang import register_language_detector
+    calls = []
+
+    def det(text):
+        calls.append(text)
+        return "FR-ca"
+
+    register_language_detector(det)
+    try:
+        assert guess_latin_language("anything at all here") == "fr"
+        assert is_english("plain english text") is False
+        register_language_detector(lambda t: (_ for _ in ()).throw(RuntimeError("boom")))
+        assert is_english("plain english text here") is True          # a broken plug-in is ignored
+    finally:
+        register_language_detector(None)
+    assert calls
+    assert is_english("plain english text") is True
 
 
 def test_state_text_flattening():

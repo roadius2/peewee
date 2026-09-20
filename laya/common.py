@@ -46,6 +46,13 @@ def render_options(q: Dict) -> List[str]:
     ]
 
 
+# Option text is capped at this many tokens per option before any budget squeeze.
+OPTION_TOKEN_CAP = 48
+# Slack kept for the instructions when options overflow the head budget, and the per-option floor.
+HEAD_OPTION_SLACK = 16
+MIN_OPTION_TOKENS = 4
+
+
 def build_sequence(
     tok,
     state: Union[str, dict, list],
@@ -54,25 +61,43 @@ def build_sequence(
     head_max_len: int = 192,
     option_order: Optional[List[int]] = None,
     truncate_left: bool = False,
+    return_info: bool = False,
 ):
-    """Format: [CLS] <type> instructions [SEP] [MASK] opt0 [MASK] opt1 ... [SEP] state [SEP]."""
+    """Format: [CLS] <type> instructions [SEP] [MASK] opt0 [MASK] opt1 ... [SEP] state [SEP].
+
+    Returns `(ids, markers)`, or `(ids, markers, info)` when `return_info` is set. `info`
+    records everything that was cut so callers can report it instead of hiding it:
+
+        state_tokens            tokens in the full serialised state
+        state_tokens_kept       how many made it into the sequence
+        state_tokens_dropped    how many did not
+        truncated               state_tokens_dropped > 0
+        truncation              "left" (kept the end) or "right" (kept the start)
+        options                 number of options
+        tokens_per_option       per-option token cap actually applied (None if not squeezed)
+        options_squeezed        True when options were cut below OPTION_TOKEN_CAP to fit head_max_len
+        options_over_cap        options whose text exceeded OPTION_TOKEN_CAP before any squeeze
+        instructions_tokens_dropped   instruction tokens cut to make room for options
+    """
     mask_tok = tok.mask_token
     opts = render_options(q)
     order = option_order if option_order is not None else list(range(len(opts)))
     ins = str(q["ins"]).replace(mask_tok, " ")
-    head_ids = tok("%s question: %s" % (q["t"], ins), add_special_tokens=False)["input_ids"]
+    head_full = tok("%s question: %s" % (q["t"], ins), add_special_tokens=False)["input_ids"]
     opt_ids = []
+    over_cap = 0
     for i in order:
-        opt_ids.append(
-            [tok.mask_token_id]
-            + tok(" " + opts[i].replace(mask_tok, " "), add_special_tokens=False)["input_ids"][:48]
-        )
+        raw = tok(" " + opts[i].replace(mask_tok, " "), add_special_tokens=False)["input_ids"]
+        if len(raw) > OPTION_TOKEN_CAP:
+            over_cap += 1
+        opt_ids.append([tok.mask_token_id] + raw[:OPTION_TOKEN_CAP])
     opt_budget = head_max_len - sum(len(o) for o in opt_ids)
-    if opt_budget < 16:
-        per = max(4, (head_max_len - 16) // max(1, len(opt_ids)))
+    per = None
+    if opt_budget < HEAD_OPTION_SLACK:
+        per = max(MIN_OPTION_TOKENS, (head_max_len - HEAD_OPTION_SLACK) // max(1, len(opt_ids)))
         opt_ids = [o[:per] for o in opt_ids]
         opt_budget = head_max_len - sum(len(o) for o in opt_ids)
-    head_ids = head_ids[: max(8, opt_budget)]
+    head_ids = head_full[: max(8, opt_budget)]
     ids = [tok.cls_token_id] + head_ids + [tok.sep_token_id]
     markers = []
     for o in opt_ids:
@@ -80,10 +105,27 @@ def build_sequence(
         ids.extend(o)
     ids.append(tok.sep_token_id)
     room = max(0, max_len - len(ids) - 1)
-    st = tok(serialize_state(state).replace(mask_tok, " "), add_special_tokens=False)["input_ids"]
-    st = st[-room:] if truncate_left else st[:room]
+    st_full = tok(serialize_state(state).replace(mask_tok, " "), add_special_tokens=False)["input_ids"]
+    st = st_full[-room:] if truncate_left else st_full[:room]
+    if room == 0:
+        st = []
     ids = ids + st + [tok.sep_token_id]
-    return ids[:max_len], [m for m in markers if m < max_len]
+    ids, markers = ids[:max_len], [m for m in markers if m < max_len]
+    if not return_info:
+        return ids, markers
+    info = {
+        "state_tokens": len(st_full),
+        "state_tokens_kept": len(st),
+        "state_tokens_dropped": len(st_full) - len(st),
+        "truncated": len(st_full) > len(st),
+        "truncation": "left" if truncate_left else "right",
+        "options": len(opt_ids),
+        "tokens_per_option": (per - 1) if per is not None else None,   # per counts the [MASK]
+        "options_squeezed": per is not None,
+        "options_over_cap": over_cap,
+        "instructions_tokens_dropped": len(head_full) - len(head_ids),
+    }
+    return ids, markers, info
 
 
 class DecisionModel(nn.Module):
@@ -197,13 +239,29 @@ def ece_score(conf: np.ndarray, correct: np.ndarray, bins: int = 15) -> float:
     return float(e)
 
 
-def confidence_from_probs(p: np.ndarray, k: int) -> float:
-    """Normalized Shannon entropy confidence: 1 - H(p) / log(k)."""
+def normalized_entropy(p: np.ndarray, k: int) -> float:
+    """H(p) / log(k) in [0, 1]: 0 for a one-hot answer, 1 for a uniform one."""
     if k < 2:
-        return 1.0
-    p = p[:k]
+        return 0.0
+    p = np.asarray(p, dtype=np.float64)[:k]
     ent = -(p * np.log(np.clip(p, 1e-12, 1.0))).sum()
-    return float(np.clip(1.0 - ent / math.log(k), 0.0, 1.0))
+    return float(np.clip(ent / math.log(k), 0.0, 1.0))
+
+
+def confidence_from_probs(p: np.ndarray, k: int) -> float:
+    """Entropy-based confidence, 1 - H(p) / log(k). Kept for callers of the old API.
+
+    Since 0.4 the `confidence` field in answers is `top_probability`, which is the same
+    quantity for every question type and is what calibration acts on.
+    """
+    return 1.0 - normalized_entropy(p, k)
+
+
+def top_probability(p: np.ndarray, k: int) -> float:
+    """Probability of the reported answer: max over the k options."""
+    if k < 1:
+        return 1.0
+    return float(np.max(np.asarray(p, dtype=np.float64)[:k]))
 
 
 def temp_bucket(qtype: int, k: int) -> str:

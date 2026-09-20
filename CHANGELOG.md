@@ -3,6 +3,48 @@
 All notable changes to this fork. Upstream is `NandhaKishorM/laya`; this fork diverged at
 upstream v0.3.4 (`d113dca`).
 
+## 0.4.0.dev0 (unreleased): Phase 1, safe to gate on
+
+### Added
+- **Truncation reporting.** `usage` now carries `state_tokens`, `state_tokens_dropped`,
+  `truncated` and `truncation` (`"left"` or `"right"`). `predict(..., truncate="left")` keeps the
+  end of an over-long state; `laya.load(..., truncate=...)` sets the default. With no setting,
+  strings and dicts keep their start and lists (conversation transcripts) keep their end. The
+  first truncation on an agent is logged at WARNING, later ones at DEBUG.
+- **Option-budget reporting.** Questions whose options were squeezed below the 48-token cap to
+  fit `head_max_len`, or whose option text exceeded the cap, are listed in
+  `usage["option_budget"]` with the tokens per option actually used, and logged once.
+  `build_sequence(..., return_info=True)` exposes the same detail.
+- **Calibration API** (`laya.calibrate`, based on upstream PR #19 by mvanhorn):
+  `collect_records` runs labelled `(state, questions, labels)` examples through an agent,
+  `fit_temperature_map` fits one temperature per question type and per option-count bucket by
+  NLL, `calibration_report` gives accuracy / ECE / NLL / Brier before and after, and
+  `Agent.fit_temperatures`, `save_calibration`, `load_calibration` and
+  `laya.load(..., calibration=path)` apply and persist the result. Labels may be an option
+  key, a score level (fractional levels split between neighbours), a bool, a probability or a
+  distribution.
+- **Batch API.** `Agent.predict_many(requests, max_batch=64)` collates every question of every
+  request into as few forward passes as possible and returns per-request results in order.
+- **`laya.patterns`**: `hierarchical_choice` (pick a group, then pick within it) and
+  `select_tool` (flat up to `max_flat` tools, grouped above that).
+- **Language-detector plug-in.** `laya.register_language_detector(fn)` routes the Latin-script
+  guess through an external detector such as lingua or fastText.
+- `score` answers include `level`, the argmax level, next to the expected `score`.
+
+### Changed
+- **`confidence` has one meaning.** It is now the calibrated probability of the reported
+  answer for every question type (top option for `choice` and `score`, `max(p, 1-p)` for
+  `noul`). Previously `choice` and `score` reported normalised entropy, so a 90/10 two-way
+  choice scored 0.53 while the identical `noul` scored 0.90. The entropy measure is kept as
+  `entropy` (0 = certain, 1 = uniform) and `confidence_from_probs` is unchanged for old callers.
+- **Short non-English Latin text now routes to the multilingual checkpoint.** The stop-word
+  lists cover the short first-person words that dominate support messages, shared words
+  ("la", "de", "no", "me") count half, strong markers ("merci", "ich", "gracias") decide on
+  their own when no English function word is present, and diacritics count on short inputs.
+  "Je veux annuler mon forfait", "Mon compte ne marche pas", "Necesito cancelar mi cuenta hoy"
+  and "Ich kann mich nicht einloggen" all route multilingual; "refund me", "no problem" and
+  "a la carte menu please" still route English.
+
 ## 0.4.0.dev0 (unreleased): Phase 0, hygiene
 
 ### Fixed

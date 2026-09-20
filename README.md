@@ -192,7 +192,11 @@ print("Churn Risk :", answers["churn_risk"]["noul"])       # -> 0.892 (89.2% pro
 
 ## Automated Confidence Gating
 
-Because Laya's probabilities are trained with strictly proper scoring rules (RLCD), confidence scores are statistically meaningful:
+`confidence` is the calibrated probability of the reported answer, for every question type:
+the top option's probability for `choice` and `score`, and `max(p, 1-p)` for `noul`. One
+threshold therefore means the same thing on every question. Each answer also carries
+`entropy`, the normalised entropy of the full distribution (0 = certain, 1 = uniform), for
+callers who want to gate on spread rather than on the winner alone.
 
 ```python
 dept = answers["department"]["choice"]
@@ -204,6 +208,83 @@ if conf >= 0.85:
 else:
     # Low confidence: escalate to human triage
     escalate_to_human_agent(dept, reason=f"Low confidence ({conf:.2f})")
+```
+
+Gate on `confidence` only after calibrating on your own labelled data (next section): the
+shipped checkpoints are over-confident, and the multilingual checkpoint ships with no fitted
+temperatures at all.
+
+### Calibration
+
+```python
+import laya
+from laya.calibrate import collect_records
+
+agent = laya.load("convaiinnovations/laya")
+
+# (state, questions, labels): labels map a question id to an option key, a score level,
+# a bool, a probability, or a full distribution. Unlabelled questions are skipped.
+examples = [
+    ({"body": "billed twice, refund please"}, questions, {"department": "billing", "churn_risk": False}),
+    ...
+]
+records = collect_records(agent, examples)         # raw logits, batched forward passes
+result = agent.fit_temperatures(records)           # one T per type + per option-count bucket
+print(result["report"]["all"])                     # accuracy / ECE / NLL / Brier before and after
+agent.save_calibration("laya-calibration.json")
+
+agent = laya.load("convaiinnovations/laya", calibration="laya-calibration.json")
+```
+
+Fit on a held-out split, not on the data you evaluate with. Temperature scaling never changes
+the argmax, so accuracy is untouched; only the probabilities move.
+
+### Truncation and token budgets
+
+The English checkpoint reads 512 tokens and the others 1,024, and the option prompt takes up to
+192 or 256 of that. Anything longer is cut, and the result says so:
+
+```python
+res = agent.predict(long_transcript, questions, truncate="left")   # keep the end of the state
+res["usage"]
+# {'input_tokens': 512, 'output_tokens': 0, 'state_tokens': 2310, 'state_tokens_dropped': 1970,
+#  'truncated': True, 'truncation': 'left'}
+```
+
+The default keeps the start of a string or dict state and the end of a list state (a
+conversation transcript, where the latest turns matter most). `laya.load(..., truncate="left")`
+sets the default per agent. The first truncation on an agent is logged at WARNING.
+
+Questions whose options had to be squeezed to fit `head_max_len` (or whose option text exceeded
+48 tokens) appear in `usage["option_budget"]`. Above roughly 20 options, split the choice in two:
+
+```python
+from laya.patterns import hierarchical_choice, select_tool
+
+hierarchical_choice(agent, state, groups={"billing": {...}, "account": {...}}, instructions="What does the user need?")
+select_tool(agent, {"task": "..."}, tools)      # flat up to 16 tools, grouped above that
+```
+
+### Batching across requests
+
+```python
+results = agent.predict_many([(state1, questions), (state2, questions), ...], max_batch=64)
+```
+
+Every question of every request goes into one forward pass (chunked at `max_batch` items), so a
+GPU does one large pass instead of many small ones. Results come back in request order with the
+same payload as `predict`.
+
+### Language detection plug-in
+
+Script detection is exact; the Latin-script language guess is a stop-word heuristic tuned to
+catch short support messages ("Je veux annuler mon forfait", "Ich kann mich nicht einloggen").
+If you already run a real detector, plug it in and the router will use it first:
+
+```python
+from lingua import Language, LanguageDetectorBuilder
+det = LanguageDetectorBuilder.from_all_languages().build()
+laya.register_language_detector(lambda text: (det.detect_language_of(text) or Language.ENGLISH).iso_code_639_1.name)
 ```
 
 ---

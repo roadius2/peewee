@@ -78,3 +78,26 @@ def test_collate_pads_and_masks(fake_tok):
     assert batch["marker_mask"].sum(1).tolist() == [3, 2]
     assert batch["qtype"].tolist() == [0, 2]
     assert collate_items([[]], fake_tok.pad_token_id) is None
+
+
+def test_return_info_reports_cuts(fake_tok):
+    state = " ".join("w%d" % i for i in range(300))
+    ids, markers, info = build_sequence(fake_tok, state, CHOICE, max_len=64, head_max_len=32, return_info=True)
+    assert info["state_tokens"] == 300
+    assert 0 < info["state_tokens_kept"] < 64
+    assert info["state_tokens_dropped"] == 300 - info["state_tokens_kept"]
+    assert info["truncated"] is True and info["truncation"] == "right"
+    assert info["options"] == 3 and info["options_squeezed"] is False and info["options_over_cap"] == 0
+
+    _, _, info = build_sequence(fake_tok, "short", CHOICE, return_info=True)
+    assert info == {"state_tokens": 1, "state_tokens_kept": 1, "state_tokens_dropped": 0, "truncated": False,
+                    "truncation": "right", "options": 3, "tokens_per_option": None, "options_squeezed": False,
+                    "options_over_cap": 0, "instructions_tokens_dropped": 0}
+
+    q = {"t": "choice", "ins": "x", "crit": {"opt%d" % i: "one two three four five six" for i in range(77)}}
+    _, _, info = build_sequence(fake_tok, "s", q, max_len=512, head_max_len=192, return_info=True)
+    assert info["options_squeezed"] is True and info["tokens_per_option"] == 3
+
+    q = {"t": "choice", "ins": "x", "crit": {"a": " ".join(["z"] * 100), "b": None}}
+    _, _, info = build_sequence(fake_tok, "s", q, return_info=True)
+    assert info["options_over_cap"] == 1 and info["options_squeezed"] is False

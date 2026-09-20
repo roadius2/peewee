@@ -4,23 +4,39 @@ import logging
 import os
 import shutil
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
 
+from .calibrate import (
+    apply_calibration_payload,
+    fit_temperature_map,
+    load_calibration as _load_calibration_file,
+    save_calibration as _save_calibration_file,
+)
 from .common import (
     QTYPES,
     amp_dtype,
     build_model,
     build_sequence,
     collate_items,
-    confidence_from_probs,
+    normalized_entropy,
     render_options,
     temp_bucket,
+    top_probability,
 )
 
 logger = logging.getLogger("laya")
+
+
+def _check_truncate(side: Optional[str]) -> Optional[str]:
+    if side is None:
+        return None
+    side = str(side).lower()
+    if side not in ("left", "right"):
+        raise ValueError("truncate must be 'left', 'right' or None, got %r" % (side,))
+    return side
 
 
 def patch_tokenizer_config(tcfg: Dict[str, Any]) -> bool:
@@ -135,12 +151,22 @@ class Agent:
         device: Optional[str] = None,
         token: Optional[str] = None,
         subfolder: Optional[str] = None,
+        calibration: Optional[str] = None,
+        truncate: Optional[str] = None,
     ):
         """Load a Laya checkpoint.
 
         `subfolder` selects one checkpoint from a repo that bundles several, e.g.
         `Agent("convaiinnovations/laya", subfolder="multilingual")`. Only that subfolder is
         downloaded, so bundling does not cost every user the whole family.
+
+        `calibration` is a JSON file written by `save_calibration`; its temperatures override
+        the ones shipped in the checkpoint config.
+
+        `truncate` sets the default side to cut an over-long state from: "right" keeps the
+        start, "left" keeps the end. Leave it None to keep the start of strings and dicts and
+        the end of lists (conversation transcripts), which is what a gate over an agent's
+        transcript needs.
         """
         from safetensors.torch import load_file
         from transformers import AutoTokenizer
@@ -224,6 +250,11 @@ class Agent:
 
         self.temperature = self.cfg.get("temperature", [1.0, 1.0, 1.0])
         self.temperature_by_options = self.cfg.get("temperature_by_options", {})
+        self.calibration_source = "checkpoint"
+        if calibration:
+            self.load_calibration(calibration)
+        self.truncate = _check_truncate(truncate)
+        self._warned = set()
         self.dtype = amp_dtype(self.cfg.get("amp_dtype", "fp16"))
 
         if self.device.type == "cuda" and torch.cuda.get_device_capability(self.device)[0] < 8:
@@ -268,17 +299,38 @@ class Agent:
             ins = json.dumps(ins)
         return {"t": t, "ins": ins, "crit": crit}
 
-    def _build_items(self, state: Union[str, dict, list], questions: Dict[str, Dict[str, Any]]) -> List[Dict]:
-        """Tokenise every question against `state` into collatable items (no torch, no weights)."""
+    # ------------------------------------------------------------------ pipeline pieces
+    def _warn_once(self, key: str, msg: str, *args):
+        """Log a WARNING the first time `key` happens on this agent, DEBUG afterwards."""
+        if key in self._warned:
+            logger.debug(msg, *args)
+        else:
+            self._warned.add(key)
+            logger.warning(msg + " (further occurrences logged at DEBUG)", *args)
+
+    def _resolve_truncate(self, state, truncate: Optional[str]) -> str:
+        side = _check_truncate(truncate) or self.truncate
+        if side is None:
+            side = "left" if isinstance(state, (list, tuple)) else "right"
+        return side
+
+    def _build_items(self, state: Union[str, dict, list], questions: Dict[str, Dict[str, Any]],
+                     truncate: Optional[str] = None) -> List[Dict]:
+        """Tokenise every question against `state` into collatable items (no torch, no weights).
+
+        Each item carries an `info` dict from `build_sequence` describing what was cut.
+        """
         max_len = self.cfg.get("max_len", 512)
         head_max_len = self.cfg.get("head_max_len", 192)
+        side = self._resolve_truncate(state, truncate)
         items = []
         for qid, qdef in questions.items():
             q = self._to_internal(qdef)
-            seq, markers = build_sequence(self.tok, state, q, max_len, head_max_len)
+            seq, markers, info = build_sequence(self.tok, state, q, max_len, head_max_len,
+                                                truncate_left=(side == "left"), return_info=True)
             if len(markers) != len(render_options(q)):
                 raise ValueError("question %r options exceed head_max_len=%d" % (qid, head_max_len))
-            items.append({"ids": seq, "markers": markers, "qtype": QTYPES[q["t"]]})
+            items.append({"ids": seq, "markers": markers, "qtype": QTYPES[q["t"]], "info": info})
         return items
 
     @torch.no_grad()
@@ -304,6 +356,43 @@ class Agent:
         act = torch.softmax(act.float(), -1).cpu().numpy()
         return logits, act, int(b["attention_mask"].sum())
 
+    def _usage(self, questions: Dict[str, Any], items: List[Dict], n_tokens: int) -> Dict[str, Any]:
+        """Token accounting plus everything that was cut, so callers can act on it."""
+        infos = [it.get("info") or {} for it in items]
+        state_tokens = max((i.get("state_tokens", 0) for i in infos), default=0)
+        dropped = max((i.get("state_tokens_dropped", 0) for i in infos), default=0)
+        side = next((i.get("truncation") for i in infos if i.get("truncation")), "right")
+        usage: Dict[str, Any] = {
+            "input_tokens": n_tokens,
+            "output_tokens": 0,
+            "state_tokens": state_tokens,
+            "state_tokens_dropped": dropped,
+            "truncated": dropped > 0,
+            "truncation": side,
+        }
+        if dropped > 0:
+            self._warn_once(
+                "state_truncated",
+                "laya: state of %d tokens was truncated (%s side kept); up to %d tokens dropped. "
+                "The result is computed on a partial state.", state_tokens, side, dropped)
+        budget = {}
+        for (qid, _qdef), info in zip(questions.items(), infos):
+            if info.get("options_squeezed") or info.get("options_over_cap"):
+                budget[qid] = {k: info[k] for k in ("options", "tokens_per_option", "options_squeezed",
+                                                     "options_over_cap", "instructions_tokens_dropped")}
+        if budget:
+            usage["option_budget"] = budget
+            squeezed = [qid for qid, b in budget.items() if b["options_squeezed"]]
+            if squeezed:
+                self._warn_once(
+                    "options_squeezed",
+                    "laya: options of question(s) %s were cut to as few as %d tokens each to fit "
+                    "head_max_len=%d. Accuracy degrades sharply here; raise head_max_len or use "
+                    "laya.patterns.hierarchical_choice.",
+                    squeezed, min(budget[q]["tokens_per_option"] for q in squeezed),
+                    self.cfg.get("head_max_len", 192))
+        return usage
+
     def _postprocess(
         self,
         questions: Dict[str, Dict[str, Any]],
@@ -312,7 +401,13 @@ class Agent:
         act: np.ndarray,
         n_tokens: int,
     ) -> Dict[str, Any]:
-        """Turn raw logits into the public answer payload (temperature, confidence, labels)."""
+        """Turn raw logits into the public answer payload (temperature, confidence, labels).
+
+        `confidence` is the calibrated probability of the reported answer for every question
+        type (the top option for `choice` and `score`, `max(p, 1-p)` for `noul`), so one
+        threshold means the same thing everywhere. `entropy` is the normalised entropy of the
+        full distribution (0 = certain, 1 = uniform) for callers who want spread as well.
+        """
         answers = {}
         for r, (qid, qdef) in enumerate(questions.items()):
             q = self._to_internal(qdef)
@@ -323,7 +418,8 @@ class Agent:
             p = np.exp(z - z.max())
             p = p / p.sum()
 
-            conf_score = round(confidence_from_probs(p, k), 4)
+            conf = round(top_probability(p, k), 4)
+            ent = round(normalized_entropy(p, k), 4)
             ext = {"act_probability": round(float(act[r, 0]), 4)}
 
             if q["t"] == "choice":
@@ -332,7 +428,8 @@ class Agent:
                     "type": "choice",
                     "choice": keys[int(p.argmax())],
                     "probabilities": {kk: round(float(v), 4) for kk, v in zip(keys, p)},
-                    "confidence": conf_score,
+                    "confidence": conf,
+                    "entropy": ent,
                     "action": ext,
                 }
             elif q["t"] == "score":
@@ -340,26 +437,31 @@ class Agent:
                 answers[qid] = {
                     "type": "score",
                     "score": round(exp_score, 4),
+                    "level": int(p.argmax()),
                     "legend": {str(i): c for i, c in enumerate(q["crit"])},
                     "probabilities": {str(i): round(float(v), 4) for i, v in enumerate(p)},
-                    "confidence": conf_score,
+                    "confidence": conf,
+                    "entropy": ent,
                     "action": ext,
                 }
             else:
                 answers[qid] = {
                     "type": "noul",
                     "noul": round(float(p[1]), 4),
-                    "confidence": round(max(float(p[1]), 1.0 - float(p[1])), 4),
+                    "confidence": conf,
+                    "entropy": ent,
                     "action": ext,
                 }
 
         return {
             "model": "laya-rl-agent",
             "answers": answers,
-            "usage": {"input_tokens": n_tokens, "output_tokens": 0},
+            "usage": self._usage(questions, items, n_tokens),
         }
 
-    def system_one(self, state: Union[str, dict, list], questions: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    # ------------------------------------------------------------------ public API
+    def system_one(self, state: Union[str, dict, list], questions: Dict[str, Dict[str, Any]],
+                   truncate: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate typed questions across state in a single, parallel forward pass.
 
         Args:
@@ -368,13 +470,82 @@ class Agent:
                 - choice: {"type": "choice", "instructions": "...", "criteria": {"optA": "...", ...}}
                 - score:  {"type": "score",  "instructions": "...", "criteria": ["lvl0", "lvl1", ...]}
                 - noul:   {"type": "noul",   "instructions": "..."}
+            truncate: "right" keeps the start of an over-long state, "left" keeps the end.
+                Default: the agent's setting, else start for strings/dicts and end for lists.
 
         Returns:
-            Dictionary with answers, probabilities, calibrated confidence, and token usage.
+            Dictionary with `answers`, and `usage` that reports token counts and whatever was
+            truncated (`usage["truncated"]`, `usage["state_tokens_dropped"]`,
+            `usage["option_budget"]`).
         """
-        items = self._build_items(state, questions)
+        items = self._build_items(state, questions, truncate=truncate)
         logits, act, n_tokens = self._forward_logits(items)
         return self._postprocess(questions, items, logits, act, n_tokens)
+
+    def predict_many(self, requests: Sequence[Any], truncate: Optional[str] = None,
+                     max_batch: int = 64) -> List[Dict[str, Any]]:
+        """Answer many (state, questions) requests in as few forward passes as possible.
+
+        `requests` is a sequence of `(state, questions)` tuples or `{"state", "questions"}`
+        dicts. Every question of every request is collated into one batch (chunked at
+        `max_batch` items to bound memory), so a GPU sees one large pass instead of many small
+        ones: the README measures 39 ms for one question and 7 ms per question at ten.
+        Results come back in request order with the same payload as `predict`.
+        """
+        parsed = []
+        for req in requests:
+            if isinstance(req, dict) and "state" in req and "questions" in req:
+                parsed.append((req["state"], req["questions"]))
+            else:
+                state, questions = req
+                parsed.append((state, questions))
+        per_request_items = [self._build_items(st, qs, truncate=truncate) for st, qs in parsed]
+        flat = [it for items in per_request_items for it in items]
+        rows: List[Tuple[np.ndarray, np.ndarray]] = []
+        for i in range(0, len(flat), max(1, int(max_batch))):
+            chunk = flat[i:i + max(1, int(max_batch))]
+            logits, act, _ = self._forward_logits(chunk)
+            rows.extend((logits[r], act[r]) for r in range(len(chunk)))
+        results = []
+        pos = 0
+        for (st, qs), items in zip(parsed, per_request_items):
+            n = len(items)
+            sel = rows[pos:pos + n]
+            pos += n
+            if n == 0:
+                results.append({"model": "laya-rl-agent", "answers": {}, "usage": self._usage(qs, items, 0)})
+                continue
+            kmax = max(len(z) for z, _ in sel)
+            logits = np.full((n, kmax), -1e4, dtype=np.float32)
+            act = np.zeros((n, sel[0][1].shape[0]), dtype=np.float32)
+            n_tok = 0
+            for r, (z, a) in enumerate(sel):
+                logits[r, :len(z)] = z
+                act[r] = a
+                n_tok += len(items[r]["ids"])
+            results.append(self._postprocess(qs, items, logits, act, n_tok))
+        return results
+
+    # ------------------------------------------------------------------ calibration
+    def fit_temperatures(self, records, min_bucket_n: int = 10, report: bool = True) -> Dict[str, Any]:
+        """Fit per-type and per-bucket temperatures from `laya.calibrate.collect_records` output
+        and apply them to this agent. Returns the fitted map plus a before/after report."""
+        result = fit_temperature_map(records, min_bucket_n=min_bucket_n, report=report)
+        self.temperature = list(result["temperature"])
+        self.temperature_by_options = dict(result["temperature_by_options"])
+        self.calibration_source = "fitted"
+        return result
+
+    def save_calibration(self, path: str, meta: Optional[Dict[str, Any]] = None) -> None:
+        """Write the current temperatures to JSON (no weights)."""
+        meta = dict(meta or {})
+        meta.setdefault("encoder", self.cfg.get("encoder"))
+        _save_calibration_file(path, self.temperature, self.temperature_by_options, meta)
+
+    def load_calibration(self, path: str) -> None:
+        """Replace the current temperatures with a JSON file written by `save_calibration`."""
+        apply_calibration_payload(self, _load_calibration_file(path))
+        self.calibration_source = path
 
     predict = system_one
 
@@ -383,12 +554,17 @@ RLAgent = Agent
 
 
 def load(model_id_or_path: str = "convaiinnovations/laya", device: Optional[str] = None,
-         token: Optional[str] = None, subfolder: Optional[str] = None) -> Agent:
+         token: Optional[str] = None, subfolder: Optional[str] = None,
+         calibration: Optional[str] = None, truncate: Optional[str] = None) -> Agent:
     """Load a Laya agent.
 
     `subfolder` picks one checkpoint out of a repo that bundles several:
 
         laya.load("convaiinnovations/laya")                           # English (repo root)
         laya.load("convaiinnovations/laya", subfolder="multilingual")
+
+    `calibration` is a JSON file from `Agent.save_calibration`; `truncate` is the default
+    side to cut over-long states from ("left" keeps the end).
     """
-    return Agent(model_id_or_path, device=device, token=token, subfolder=subfolder)
+    return Agent(model_id_or_path, device=device, token=token, subfolder=subfolder,
+                 calibration=calibration, truncate=truncate)
