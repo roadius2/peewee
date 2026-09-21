@@ -171,11 +171,14 @@ def do_onnx(agent, name, out_dir):
 # ---------------------------------------------------------------------------- 4. calibrate
 def massive_examples(locales, split, per_locale, seed=0):
     from datasets import load_dataset
+    # `datasets` >= 4 no longer runs the repo's loading script; the hub's parquet conversion
+    # holds every locale in one config with a `locale` column and the same intent labels.
+    full = load_dataset("AmazonScience/massive", "default", split=split, revision="refs/convert/parquet")
+    names = full.features["intent"].names
     examples = []
     labels_by_locale = {}
     for loc in locales:
-        ds = load_dataset("AmazonScience/massive", loc, split=split)
-        names = ds.features["intent"].names
+        ds = full.filter(lambda row, loc=loc: row["locale"] == loc)
         rng = np.random.default_rng(seed)
         idx = rng.choice(len(ds), size=min(per_locale, len(ds)), replace=False)
         q = {"intent": {"type": "choice", "instructions": "What does the user want in `utt`?",
@@ -215,7 +218,8 @@ def do_calibrate(agent, name, out_dir, per_locale):
 # ---------------------------------------------------------------------------- 5. lengths
 def do_lengths(agent, n_samples, lengths):
     from datasets import load_dataset
-    ds = load_dataset("imdb", split="test").shuffle(seed=0).select(range(n_samples))
+    # the bare "imdb" alias is gone from the hub
+    ds = load_dataset("stanfordnlp/imdb", split="test").shuffle(seed=0).select(range(n_samples))
     q = {"sentiment": {"type": "choice", "instructions": "Is the movie review in `review` positive or negative?",
                        "criteria": {"negative": None, "positive": None}}}
     label = ["negative", "positive"]

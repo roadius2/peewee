@@ -24,7 +24,9 @@ LAYA_WORKERS       inference threads; keep 1 per GPU (default 1)
 LAYA_API_KEY       optional bearer token required on /v1/* endpoints
 LAYA_MAX_STATE_CHARS   reject states longer than this many characters (default 200000)
 LAYA_BACKEND       torch (default) | onnx (see laya.onnx_backend; LAYA_MODELS then names
-                   exported directories: name=path,name=path)
+                   exported directories: name=path,name=path). With onnx, LAYA_DEVICE=cuda
+                   requires the CUDA provider and fails at startup without it; unset, the
+                   backend picks CUDA when available and warns if it has to run on CPU.
 
 Endpoints
 ---------
@@ -173,22 +175,27 @@ class Metrics:
 class DynamicBatcher:
     """Collect requests for one agent and answer them in shared forward passes.
 
-    Requests are `(state, questions, truncate)`. A flush happens when the queued question count
-    reaches `max_batch` or `max_wait` seconds after the first request of the batch, whichever
-    comes first. Inference runs in `executor` so the event loop keeps accepting requests.
+    Requests are `(state, questions, truncate)`. While the agent is idle, a flush happens when
+    the queued question count reaches `max_batch` or `max_wait` seconds after the first request,
+    whichever comes first. While a forward pass is running (up to `max_inflight` of them, one per
+    inference worker), arrivals accumulate and go out together the moment a pass finishes, so
+    under load the batch grows to whatever queued instead of the timer slicing it into many
+    small passes. Inference runs in `executor` so the event loop keeps accepting requests.
     """
 
     def __init__(self, name: str, agent: Any, executor: ThreadPoolExecutor, max_batch: int = 32,
-                 max_wait: float = 0.005, metrics: Optional[Metrics] = None):
+                 max_wait: float = 0.005, metrics: Optional[Metrics] = None, max_inflight: int = 1):
         self.name = name
         self.agent = agent
         self.executor = executor
         self.max_batch = max(1, int(max_batch))
         self.max_wait = max(0.0, float(max_wait))
+        self.max_inflight = max(1, int(max_inflight))
         self.metrics = metrics or Metrics()
         self._queue: List[Tuple[Any, Dict[str, Any], Optional[str], "asyncio.Future"]] = []
         self._queued_questions = 0
         self._flush_task: Optional[asyncio.Task] = None
+        self._inflight = 0
         self._lock = asyncio.Lock()
         self.batches = 0
 
@@ -203,7 +210,9 @@ class DynamicBatcher:
             self._queue.append((state, questions, truncate, fut))
             self._queued_questions += max(1, len(questions))
             self.metrics.queue(self.name, len(self._queue))
-            if self._queued_questions >= self.max_batch:
+            if self._inflight >= self.max_inflight:
+                pass                                # a running pass drains us when it finishes
+            elif self._queued_questions >= self.max_batch:
                 self._schedule_flush(0.0)
             elif self._flush_task is None:
                 self._schedule_flush(self.max_wait)
@@ -224,9 +233,16 @@ class DynamicBatcher:
             batch, self._queue = self._queue, []
             self._queued_questions = 0
             self._flush_task = None
+            self._inflight += 1
             self.metrics.queue(self.name, 0)
-        if batch:
-            await self._run(batch)
+        try:
+            if batch:
+                await self._run(batch)
+        finally:
+            async with self._lock:
+                self._inflight -= 1
+                if self._queue and self._flush_task is None:
+                    self._schedule_flush(0.0)       # drain what arrived while we were busy
 
     async def _run(self, batch):
         loop = asyncio.get_running_loop()
@@ -284,7 +300,8 @@ class DecisionService:
             if b is None:
                 agent = self.router.load(name)
                 b = DynamicBatcher(name, agent, self.executor, self.settings.max_batch,
-                                   self.settings.max_wait_ms / 1000.0, self.metrics)
+                                   self.settings.max_wait_ms / 1000.0, self.metrics,
+                                   max_inflight=max(1, self.settings.workers))
                 self._batchers[name] = b
             return b
 
@@ -347,7 +364,8 @@ def build_router(settings: Settings):
     """Construct and preload the Router the service will run. Split out so tests can stub it."""
     from .router import Router, normalise_name
     if settings.backend == "onnx":
-        from .onnx_backend import OnnxAgent
+        from .onnx_backend import OnnxAgent, providers_for_device
+        providers = providers_for_device(settings.device)
         router = Router(max_loaded=max(2, len(settings.models)), device=settings.device, token=settings.hf_token)
         names = []
         for spec in settings.models:
@@ -355,7 +373,8 @@ def build_router(settings: Settings):
             if not path:
                 raise ValueError("LAYA_BACKEND=onnx needs LAYA_MODELS as name=exported_dir[,name=dir]")
             key = normalise_name(name)
-            router.attach(key, OnnxAgent(path, calibration=settings.calibration_for(key), truncate=settings.truncate))
+            router.attach(key, OnnxAgent(path, calibration=settings.calibration_for(key), truncate=settings.truncate,
+                                         providers=providers))
             names.append(key)
         settings.models = names
         return router

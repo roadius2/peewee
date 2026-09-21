@@ -169,6 +169,33 @@ banking77 is the one clear loss, and it is architectural: a choice question's op
 
 103–332 questions/sec batched. Jev independently measured at 236-276 ms p50, so Laya answers one question roughly **6–7× faster**.
 
+## Decision service throughput (fork, 2026-09-20)
+
+`laya serve` with `english` and `multilingual` resident, driven by `scripts/loadtest.py`: each
+request is one state and three questions (choice, score, noul), five states rotating so both
+checkpoints see traffic. Questions/s counts every question answered; p50 is per request.
+Measured on one host (AMD Ryzen 9 9950X3D, RTX 5090); the CPU runs are the `docker/Dockerfile`
+image limited to 8 cores with `LAYA_BACKEND=onnx` and the fp32 export, or the torch CPU path.
+
+| backend | clients | questions/s | requests/s | p50 ms | p99 ms |
+|---|---|---|---|---|---|
+| torch, RTX 5090 | 4 | 362 | 121 | 23.5 | 262 |
+| torch, RTX 5090 | 32 | **1,338** | 446 | 77 | 87 |
+| torch, RTX 5090 | 128 | **1,466** | 489 | 281 | 368 |
+| ONNX fp32, 8 CPU cores | 4 | 33 | 11 | 383 | 562 |
+| ONNX fp32, 8 CPU cores | 32 | 41 | 14 | 2,513 | 2,811 |
+| ONNX int8 (weight-only), 8 CPU cores | 4 | 26 | 9 | 457 | 572 |
+| torch, 8 CPU cores | 32 | 20 | 7 | 5,148 | 5,531 |
+
+Before the batcher fix in this release the GPU numbers at 32 clients were 467 questions/s at
+p50 229 ms: flushes were timer-driven, so under load each forward pass carried about 1.5
+requests. Draining the queue after each pass (about 30 questions per pass at 32 clients) is
+what the 2.9x comes from. On CPU the same change moved throughput from 36 to 41 questions/s,
+because the CPU is compute-bound at any batch size. Weight-only int8 is slower than fp32 on
+this CPU; its value is the 60% smaller file. Rule of thumb: one 8-core CPU box serves about
+40 questions/s at sub-second latency; one RTX 5090 serves about 1,400 questions/s, roughly
+35x, with the p99 under 100 ms up to 32 concurrent clients.
+
 ### Calibration
 
 | | as shipped | temperature refit | 

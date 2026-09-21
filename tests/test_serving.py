@@ -82,6 +82,25 @@ def test_batcher_groups_concurrent_requests():
     assert len(agent.calls) == 1 and agent.calls[0] == [2] * 6          # one forward pass for all six
 
 
+def test_batcher_drains_queue_while_a_pass_is_running():
+    """Under load the timer must not slice the queue into many small passes: whatever arrives
+    while one forward pass runs goes out together as soon as it finishes."""
+    agent = StubAgent("english", delay=0.05)
+    b = DynamicBatcher("english", agent, ThreadPoolExecutor(1), max_batch=64, max_wait=0.001)
+
+    async def go():
+        tasks = []
+        for i in range(20):
+            tasks.append(asyncio.ensure_future(b.submit("s%d" % i, Q)))
+            await asyncio.sleep(0.002)          # arrivals spread over 40 ms, one pass takes 50 ms
+        return await asyncio.gather(*tasks)
+
+    results = run(go())
+    assert len(results) == 20
+    assert len(agent.calls) <= 3, agent.calls          # first arrival, then the drained rest
+    assert max(len(c) for c in agent.calls) >= 15
+
+
 def test_batcher_flushes_at_max_batch():
     agent = StubAgent("english")
     b = DynamicBatcher("english", agent, ThreadPoolExecutor(1), max_batch=4, max_wait=5.0)

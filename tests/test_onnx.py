@@ -89,6 +89,17 @@ def test_export_quantized(tmp_path):
     assert abs(sum(p.values()) - 1.0) < 1e-3
     full = OnnxAgent(out, tokenizer=TinyTokenizer(), prefer_quantized=False)
     assert full.quantized is False
+    # weight-only int8: encoder weights are MatMulNBits, activations and the head stay fp32,
+    # so probabilities track the fp32 graph closely (dynamic int8 broke the MLP on real weights)
+    import onnx
+    ops = {n.op_type for n in onnx.load(o.onnx_path).graph.node}
+    assert "MatMulNBits" in ops and "DynamicQuantizeLinear" not in ops
+    assert meta["quantization"].startswith("weight-only int8")
+    ref = full.system_one("hello there", QS)["answers"]
+    for qid in QS:
+        if "probabilities" in ref[qid]:
+            for k, v in ref[qid]["probabilities"].items():
+                assert abs(v - res["answers"][qid]["probabilities"][k]) < 0.05
 
 
 def test_missing_export_dir_raises(tmp_path):
@@ -96,3 +107,71 @@ def test_missing_export_dir_raises(tmp_path):
     (tmp_path / "rl_agent_config.json").write_text('{"encoder": "x", "head_layers": 1}')
     with pytest.raises(FileNotFoundError, match="export-onnx"):
         OnnxAgent(str(tmp_path), tokenizer=TinyTokenizer())
+
+
+def _accelerator():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return None
+
+
+def test_export_restores_model_dtype(tmp_path):
+    """Export needs an fp32 CPU copy; the caller's agent must come back unchanged."""
+    from laya.onnx_backend import export_onnx
+    a = tiny_agent(tmp_path)
+    a.model = a.model.to(torch.bfloat16)
+    a.dtype = torch.bfloat16
+    export_onnx(a, str(tmp_path / "export"), quantize=False)
+    p = next(a.model.parameters())
+    assert p.dtype == torch.bfloat16 and p.device == a.device
+
+
+@pytest.mark.skipif(_accelerator() is None, reason="needs a CUDA or MPS device")
+def test_export_restores_model_device(tmp_path):
+    from laya.onnx_backend import export_onnx
+    a = tiny_agent(tmp_path)
+    a.device = _accelerator()
+    a.model = a.model.to(a.device)
+    export_onnx(a, str(tmp_path / "export"), quantize=False)
+    assert next(a.model.parameters()).device.type == a.device.type
+    assert a.predict("the customer was charged twice", QS)["answers"]["dept"]["choice"] in QS["dept"]["criteria"]
+
+
+def _exported(tmp_path):
+    from laya.onnx_backend import export_onnx
+    out = str(tmp_path / "export")
+    export_onnx(tiny_agent(tmp_path), out, quantize=False)
+    return out
+
+
+def test_requested_provider_missing_raises(tmp_path, monkeypatch):
+    """An explicit provider that the runtime lacks is a startup error, not a silent CPU run."""
+    import onnxruntime as ort
+    from laya.onnx_backend import OnnxAgent
+    out = _exported(tmp_path)
+    monkeypatch.setattr(ort, "get_available_providers", lambda: ["CPUExecutionProvider"])
+    with pytest.raises(RuntimeError, match="CUDAExecutionProvider"):
+        OnnxAgent(out, tokenizer=TinyTokenizer(), providers=["CUDAExecutionProvider"])
+
+
+def test_auto_provider_warns_when_cuda_is_only_missing_from_onnxruntime(tmp_path, monkeypatch, caplog):
+    import logging
+    import onnxruntime as ort
+    from laya.onnx_backend import OnnxAgent
+    out = _exported(tmp_path)
+    monkeypatch.setattr(ort, "get_available_providers", lambda: ["CPUExecutionProvider"])
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    with caplog.at_level(logging.WARNING, logger="laya.onnx"):
+        o = OnnxAgent(out, tokenizer=TinyTokenizer())
+    assert o.providers == ["CPUExecutionProvider"]
+    assert any("onnxruntime-gpu" in r.getMessage() for r in caplog.records)
+
+
+def test_providers_for_device():
+    from laya.onnx_backend import providers_for_device
+    assert providers_for_device("cuda") == ["CUDAExecutionProvider"]
+    assert providers_for_device("cuda:0") == ["CUDAExecutionProvider"]
+    assert providers_for_device("cpu") == ["CPUExecutionProvider"]
+    assert providers_for_device(None) is None

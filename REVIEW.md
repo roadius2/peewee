@@ -244,7 +244,7 @@ context problem. Phase 4 is where the accuracy comes from.
 - **Option budget guard.** Warn (and expose in `usage`) when options are cut below a per-option
   token floor; document the hierarchical-choice pattern with a helper.
 
-### Phase 2: the decision service — done, see `CHANGELOG.md`; ONNX parity verified on a small BERT model, not yet on ModernBERT weights
+### Phase 2: the decision service — done, see `CHANGELOG.md`; verified on real weights on an RTX 5090 (2026-09-20, `reports/trinity-prime-20260920`): fp32 ONNX matches torch (argmax agreement 1.000, max probability difference 0.02), the original dynamic int8 did not (agreement 0.70 to 0.87, differences up to 0.91) and was replaced by weight-only int8, see section 7
 - `laya/server.py`: FastAPI + uvicorn, `POST /v1/decide` (single) and `POST /v1/decide/batch`,
   `GET /healthz`, `GET /metrics` (Prometheus: latency, batch size, truncation rate, routing
   counts, per-question confidence histograms).
@@ -257,7 +257,35 @@ context problem. Phase 4 is where the accuracy comes from.
 - Thin clients: a Python client, and a LiteLLM guardrail/router hook so existing pipelines can
   call it without new code.
 
-### Phase 3: the context problem
+### Phase 3: the context problem — measured on 2026-09-20; do not raise the defaults, fine-tune
+Status note. `scripts/length_sweep.py` (`reports/trinity-prime-20260920/length_sweep.md`) ran two
+experiments per checkpoint with no retraining. The checkpoints are fine-tuned at `max_len` 1,024
+(`english` at 512).
+
+*Natural long reviews* (300 labelled IMDB reviews of 1,024 to 3,024 tokens): reading the whole
+review at 2,048 or 4,096 is never worse than truncating and gains 0 to 3 points (`english` 0.843
+to 0.867, `typed-decisions` 0.857 to 0.887, `multilingual` flat at 0.75). So longer inputs do
+not break the encoders.
+
+*Short review after neutral background* (200 short reviews behind AG News text, nothing
+truncated): accuracy falls with the distance of the evidence from the start. `english` alone
+0.925; at about 900 tokens 0.845; 1,900 tokens 0.700; 3,900 tokens 0.550; 7,900 tokens 0.485,
+which is chance. `typed-decisions` 0.930, 0.840, 0.685, 0.540, 0.530; `multilingual` 0.890,
+0.695, 0.585, 0.590, 0.530. The control that keeps only the last 1,024 tokens (what the service
+does today for list states) holds at 0.86, 0.855, 0.83, 0.81 for `english`. Two effects: neutral
+text in the state costs about 8 points even inside the trained length (distraction), and the
+model cannot read evidence past the position it was trained to (extrapolation).
+
+Decision. The defaults stay at the checkpoints' `max_len`, because raising them is harmful for
+the workloads that matter: when the decisive part of a transcript sits at the end, a longer
+window makes the model attend past its trained positions and lose it, while end-preserving
+truncation at 1,024 keeps it. The 0 to 3 point gain on natural long reviews is not worth that.
+Phase 3 is therefore the long-context fine-tune, and the training mix must contain long states
+whose evidence sits deep in the input, not just long documents. Until then: keep the end of
+transcripts, send structured state instead of raw context, and chunk-and-aggregate for inputs
+that genuinely exceed 1,024 tokens.
+
+The original plan, kept for reference:
 - **Test the encoders past their training length.** ModernBERT-large and mmBERT-base both use
   RoPE and were pre-trained to 8,192 tokens; Laya set `max_len` to 512/1,024 at fine-tuning
   time. Run the held-out suites at `max_len` 1,024, 2,048 and 4,096 with no retraining and
@@ -298,3 +326,40 @@ context problem. Phase 4 is where the accuracy comes from.
 - Seeded `ultra_laya` with the full upstream history (50 commits) so upstream fixes can be
   merged later with `git merge`.
 - Added this review. No library code was changed.
+
+---
+
+## 7. Open questions after the first GPU validation (2026-09-20)
+
+Carried over from the first two development sessions; see `reports/trinity-prime-20260920/`.
+
+- **int8 ONNX, resolved.** Dynamic int8 (activations quantised too) broke the GeGLU feed-forward
+  blocks: probabilities moved by up to 0.91 and 13 to 30% of argmaxes flipped. Per-channel
+  weights, unsigned weights, pre-processing and excluding the head all failed the same way;
+  excluding the MLP alone recovered most of it. `--quantize` now does weight-only int8
+  (`MatMulNBits`, block 128) on the encoder's linear weights, which tracks fp32 to within 0.06
+  at about 40% of the size but is no faster on CPU. A faster CPU path needs activation
+  quantisation that survives the MLP outliers (SmoothQuant-style scaling or static calibration
+  with per-channel activation ranges), which is open.
+- **Fitted temperatures are not wired as defaults.** `calibration/multilingual.json` (T = 2.07
+  for the `choice:11+` bucket, fit on 438 MASSIVE examples, held-out ECE 0.37 to 0.13) and
+  `calibration/english.json` (T = 2.44) are committed. They only cover the 11+ option bucket,
+  so wiring them in `Agent._init_common` is a product decision for the owner.
+- **Phase 3 is decided**: fine-tune for long context; do not raise `max_len`. See the Phase 3 status note.
+- **The CPU Docker image builds and serves as written** (1.38 GB, `python:3.11-slim`, CPU torch
+  plus the server and onnx extras); the CUDA image is still unbuilt. Throughput is in
+  `BENCHMARKS.md` under "Decision service throughput": about 40 questions/s on 8 CPU cores
+  against about 1,400 on the 5090, so CPU serving is for low-volume or edge use only.
+- `act_probability` in answers comes from an "action head" whose meaning is undocumented
+  upstream; it is passed through untouched. Decide whether to document or drop it.
+- The language guess is a heuristic tuned on a small regression set in `tests/test_lang.py`.
+  Quebec French traffic is the motivating case; extend the tests with real samples before
+  tuning further, and prefer plugging in a real detector for production.
+- `hierarchical_choice` multiplies the two stages' top probabilities as the path confidence;
+  it is not calibrated as a whole.
+- The service's `/v1/decide/batch` returns per-item errors inline with HTTP 200; a client that
+  wants strict semantics should use `/v1/decide`.
+- Upstream `NandhaKishorM/laya` has a single maintainer and a large unreviewed PR backlog.
+  Work on the fork; mine upstream PRs for ideas (#19 calibration and #27 preload are ported,
+  #18 head-budget and #3 server were references). The transformers-floor fix and the router
+  tuple fix would be easy PRs to send upstream.

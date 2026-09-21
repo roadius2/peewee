@@ -1,0 +1,24 @@
+{
+  "temperature": [
+    2.4410483837127686,
+    1.0,
+    1.0
+  ],
+  "temperature_by_options": {
+    "choice:11+": 2.4410483837127686
+  },
+  "meta": {
+    "fit_on": "AmazonScience/massive validation",
+    "locales": [
+      "en-US",
+      "fr-FR",
+      "de-DE",
+      "es-ES",
+      "hi-IN",
+      "ja-JP"
+    ],
+    "n_fit": 438,
+    "n_test": 540,
+    "encoder": "answerdotai/ModernBERT-large"
+  }
+}

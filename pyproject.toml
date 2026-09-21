@@ -43,6 +43,7 @@ server = [
 onnx = [
     "onnx>=1.15",
     "onnxruntime>=1.17",
+    "onnx-ir",
 ]
 dev = [
     "pytest>=8.0",

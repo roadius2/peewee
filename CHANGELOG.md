@@ -38,9 +38,46 @@ upstream v0.3.4 (`d113dca`).
   `export-onnx`).
 
 ### Changed
+- Session notes left the repo: the hand-off document and bootstrap script are gone, Claude's
+  project instructions and permissions are git-ignored local files, and the open questions moved
+  to `REVIEW.md` section 7. CI now also runs on pushes to `claude/main`.
 - `Agent.__init__` is split into `resolve_checkpoint` (locate/download, load config) and
   `Agent._init_common` (tokenizer, temperatures, truncation default) so alternative backends
   reuse them. `Agent.model_dir` records where the checkpoint was loaded from.
+
+### Added (validation artefacts)
+- `scripts/length_sweep.py`: the Phase 3 measurement, see `docs/GPU_VALIDATION.md`. Natural long
+  IMDB reviews and short reviews behind neutral padding, per checkpoint, at each `max_len`. Result
+  in `REVIEW.md` Phase 3: the defaults stay at 1,024 because the checkpoints cannot read evidence
+  placed past their trained length (chance at 4,000 tokens), so Phase 3 is the fine-tune.
+- `reports/trinity-prime-20260920/`: the first validation report on real weights (RTX 5090),
+  and `calibration/{english,multilingual}.json`, temperatures fitted on MASSIVE by
+  `scripts/gpu_validate.py`. Not yet loaded by default.
+
+### Fixed
+- `DynamicBatcher` now batches under load. Flushes were purely timer-driven (`LAYA_MAX_WAIT_MS`
+  after the first queued request), so once the inference worker was busy the timer kept slicing
+  the queue into passes of one or two requests that then waited behind each other. Arrivals now
+  accumulate while a pass runs (one per `LAYA_WORKERS`) and go out together the moment it
+  finishes. On an RTX 5090 with 32 concurrent clients this took the service from 467 to 1,338
+  questions/s and p50 from 229 to 77 ms; numbers in `BENCHMARKS.md`.
+- `--quantize` now writes a weight-only int8 export (`MatMulNBits` on the encoder's linear
+  weights, activations and the decision head in fp32). The previous dynamic int8 recipe broke the
+  GeGLU feed-forward blocks on the real checkpoints: probabilities moved by up to 0.91 and 13 to
+  30% of argmaxes flipped. The new export tracks fp32 to within 0.06 on all three checkpoints at
+  about 40% of the file size. It is not faster than fp32 on CPU; the gain is memory. Needs the
+  `onnx-ir` package, added to the `onnx` extra.
+- `OnnxAgent` no longer drops to CPU quietly. An explicit `providers` list naming a provider the
+  runtime lacks raises at construction, and the automatic choice logs a warning when torch can see
+  a CUDA device but the installed `onnxruntime` wheel has no CUDA provider. The service maps
+  `LAYA_DEVICE` onto the ONNX backend (`providers_for_device`), so `LAYA_DEVICE=cuda` with
+  `LAYA_BACKEND=onnx` fails at startup instead of serving from CPU.
+- `export_onnx` moved the caller's model to fp32 on CPU for tracing and left it there, so the
+  next `predict` on a CUDA agent failed with a device mismatch. The model is moved back to its
+  original device and dtype after export (found on the first real GPU run).
+- `scripts/gpu_validate.py` loads MASSIVE from the hub's parquet conversion (one config, filtered
+  by `locale`) because `datasets` 4+ no longer runs dataset scripts, and IMDB as
+  `stanfordnlp/imdb` because the bare alias is gone.
 
 ## 0.4.0.dev0 (unreleased): Phase 1, safe to gate on
 

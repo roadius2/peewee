@@ -1,0 +1,973 @@
+{
+  "env": {
+    "host": "trinity-prime",
+    "python": "3.13.7",
+    "torch": "2.11.0+cu128",
+    "laya": "0.4.0.dev0",
+    "cuda": true,
+    "date": "2026-09-20 21:55"
+  },
+  "args": {
+    "out": "reports/trinity-prime-20260920",
+    "models": "english,multilingual,typed-decisions",
+    "device": null,
+    "skip": "",
+    "per_locale": 300,
+    "length_samples": 300,
+    "lengths": "512,1024,2048,4096"
+  },
+  "checkpoints": {
+    "english": {
+      "load": {
+        "ok": true,
+        "seconds": 4.1,
+        "result": {
+          "load_seconds": 3.8,
+          "device": "cuda",
+          "dtype": "torch.bfloat16",
+          "fell_back_to_cpu": false,
+          "cfg": {
+            "encoder": "answerdotai/ModernBERT-large",
+            "max_len": 512,
+            "head_max_len": 192,
+            "head_layers": 2,
+            "temperature": [
+              1.6369030475616455,
+              1.2514300346374512,
+              1.983399510383606
+            ],
+            "temperature_by_options": {
+              "choice:3-5": 1.7601518630981445,
+              "choice:6-10": 1.0000158548355103,
+              "score:3-5": 1.2514300346374512,
+              "noul:2": 1.983399510383606,
+              "choice:11+": 0.10058280825614929,
+              "choice:2": 1.9063563346862793
+            }
+          },
+          "n_params": 421293827,
+          "vram_mb": 1607,
+          "gpu": "NVIDIA GeForce RTX 5090",
+          "samples": [
+            {
+              "state": "Hi, we were billed twice for March. Please refund the duplic",
+              "intent": "refund",
+              "intent_conf": 0.998,
+              "frustration": 1.618,
+              "churn": 0.5757,
+              "usage": {
+                "input_tokens": 374,
+                "output_tokens": 0,
+                "state_tokens": 26,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "The API has been returning 502s since 9am and our checkout i",
+              "intent": "technical_help",
+              "intent_conf": 0.9983,
+              "frustration": 1.5051,
+              "churn": 0.0772,
+              "usage": {
+                "input_tokens": 349,
+                "output_tokens": 0,
+                "state_tokens": 21,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "Je veux annuler mon forfait, votre service ne marche pas dep",
+              "intent": "refund",
+              "intent_conf": 0.9136,
+              "frustration": 2.2692,
+              "churn": 0.2964,
+              "usage": {
+                "input_tokens": 364,
+                "output_tokens": 0,
+                "state_tokens": 24,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "\u092e\u0941\u091d\u0938\u0947 \u0926\u094b \u092c\u093e\u0930 \u0936\u0941\u0932\u094d\u0915 \u0932\u093f\u092f\u093e \u0917\u092f\u093e, \u0915\u0943\u092a\u092f\u093e \u092a\u0948\u0938\u0947 \u0935\u093e\u092a\u0938 \u0915\u0930\u0947\u0902\u0964",
+              "intent": "other",
+              "intent_conf": 0.5396,
+              "frustration": 1.0168,
+              "churn": 0.0842,
+              "usage": {
+                "input_tokens": 519,
+                "output_tokens": 0,
+                "state_tokens": 55,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "Can I get pricing for 50 seats on the enterprise tier?",
+              "intent": "other",
+              "intent_conf": 0.519,
+              "frustration": 0.6645,
+              "churn": 0.0,
+              "usage": {
+                "input_tokens": 329,
+                "output_tokens": 0,
+                "state_tokens": 17,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "Ich kann mich seit gestern nicht einloggen, bitte helfen Sie",
+              "intent": "other",
+              "intent_conf": 0.5492,
+              "frustration": 1.7264,
+              "churn": 0.1559,
+              "usage": {
+                "input_tokens": 364,
+                "output_tokens": 0,
+                "state_tokens": 24,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            }
+          ]
+        }
+      },
+      "latency": {
+        "ok": true,
+        "seconds": 2.0,
+        "result": {
+          "questions_1": {
+            "p50_ms": 6.76,
+            "mean_ms": 6.76,
+            "min_ms": 6.72,
+            "n": 10
+          },
+          "questions_5": {
+            "p50_ms": 9.74,
+            "mean_ms": 9.74,
+            "min_ms": 9.72,
+            "n": 10
+          },
+          "questions_10": {
+            "p50_ms": 12.88,
+            "mean_ms": 12.89,
+            "min_ms": 12.86,
+            "n": 10
+          },
+          "questions_50": {
+            "p50_ms": 43.76,
+            "mean_ms": 43.76,
+            "min_ms": 43.7,
+            "n": 10
+          },
+          "predict_many_32x5": {
+            "p50_ms": 162.61,
+            "mean_ms": 162.62,
+            "min_ms": 162.54,
+            "n": 5,
+            "per_question_ms": 1.016
+          }
+        }
+      },
+      "onnx": {
+        "ok": true,
+        "seconds": 29.7,
+        "result": {
+          "export": {
+            "opset": 17,
+            "quantized": true,
+            "export_seconds": 4.73,
+            "encoder": "answerdotai/ModernBERT-large",
+            "torch": "2.11.0+cu128",
+            "inputs": [
+              "input_ids",
+              "attention_mask",
+              "marker_pos",
+              "marker_mask",
+              "qtype"
+            ],
+            "outputs": [
+              "logits",
+              "act_logits"
+            ],
+            "quantize_seconds": 1.39,
+            "quantization": "weight-only int8 (MatMulNBits, block 128, symmetric); encoder MatMul weights only, decision head and attention products fp32"
+          },
+          "fp32": {
+            "model": "model.onnx",
+            "providers": [
+              "CPUExecutionProvider"
+            ],
+            "max_abs_prob_diff": 0.0195,
+            "mean_abs_prob_diff": 0.00241,
+            "argmax_agreement": 1.0,
+            "latency_1q": {
+              "p50_ms": 63.66,
+              "mean_ms": 66.34,
+              "min_ms": 62.49,
+              "n": 10
+            },
+            "latency_5q": {
+              "p50_ms": 234.31,
+              "mean_ms": 241.17,
+              "min_ms": 227.94,
+              "n": 10
+            }
+          },
+          "int8": {
+            "model": "model.int8.onnx",
+            "providers": [
+              "CPUExecutionProvider"
+            ],
+            "max_abs_prob_diff": 0.053,
+            "mean_abs_prob_diff": 0.00496,
+            "argmax_agreement": 1.0,
+            "latency_1q": {
+              "p50_ms": 87.13,
+              "mean_ms": 93.54,
+              "min_ms": 85.0,
+              "n": 10
+            },
+            "latency_5q": {
+              "p50_ms": 280.43,
+              "mean_ms": 284.19,
+              "min_ms": 264.77,
+              "n": 10
+            }
+          }
+        }
+      },
+      "calibrate": {
+        "ok": true,
+        "seconds": 2.8,
+        "result": {
+          "fit": {
+            "temperature": [
+              2.4410483837127686,
+              1.0,
+              1.0
+            ],
+            "temperature_by_options": {
+              "choice:11+": 2.4410483837127686
+            },
+            "n_by_bucket": {
+              "choice:11+": 438
+            }
+          },
+          "fit_report": {
+            "n": 438,
+            "before": {
+              "accuracy": 0.3835616438356164,
+              "ece": 0.3374962253017485,
+              "nll": 3.015956466047642,
+              "brier": 0.8907109902368368,
+              "mean_confidence": 0.7210578691373649
+            },
+            "after": {
+              "accuracy": 0.3835616438356164,
+              "ece": 0.056865239000156435,
+              "nll": 2.1799202345459223,
+              "brier": 0.7378464299954987,
+              "mean_confidence": 0.39563496496921363
+            }
+          },
+          "held_out": {
+            "n": 540,
+            "before": {
+              "accuracy": 0.3592592592592593,
+              "ece": 0.3441233101447303,
+              "nll": 2.96438546687789,
+              "brier": 0.9135837055850192,
+              "mean_confidence": 0.7025827610878603
+            },
+            "after": {
+              "accuracy": 0.3592592592592593,
+              "ece": 0.08752172890862457,
+              "nll": 2.188414614454804,
+              "brier": 0.7529497624112738,
+              "mean_confidence": 0.38330557977756924
+            }
+          },
+          "per_locale_accuracy": {
+            "en-US": 0.622,
+            "fr-FR": 0.444,
+            "de-DE": 0.256,
+            "es-ES": 0.4,
+            "hi-IN": 0.067,
+            "ja-JP": 0.367
+          },
+          "n_by_locale": {
+            "en-US": 73,
+            "fr-FR": 73,
+            "de-DE": 73,
+            "es-ES": 73,
+            "hi-IN": 73,
+            "ja-JP": 73
+          },
+          "calibration_file": "reports/trinity-prime-20260920/calibration/english.json"
+        }
+      }
+    },
+    "multilingual": {
+      "load": {
+        "ok": true,
+        "seconds": 3.3,
+        "result": {
+          "load_seconds": 3.2,
+          "device": "cuda",
+          "dtype": "torch.bfloat16",
+          "fell_back_to_cpu": false,
+          "cfg": {
+            "encoder": "jhu-clsp/mmBERT-base",
+            "max_len": 1024,
+            "head_max_len": 256,
+            "head_layers": 2,
+            "temperature": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "temperature_by_options": {}
+          },
+          "n_params": 321908995,
+          "vram_mb": 1256,
+          "gpu": "NVIDIA GeForce RTX 5090",
+          "samples": [
+            {
+              "state": "Hi, we were billed twice for March. Please refund the duplic",
+              "intent": "refund",
+              "intent_conf": 1.0,
+              "frustration": 2.1265,
+              "churn": 0.1016,
+              "usage": {
+                "input_tokens": 376,
+                "output_tokens": 0,
+                "state_tokens": 26,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "The API has been returning 502s since 9am and our checkout i",
+              "intent": "technical_help",
+              "intent_conf": 0.9252,
+              "frustration": 2.0712,
+              "churn": 0.0145,
+              "usage": {
+                "input_tokens": 371,
+                "output_tokens": 0,
+                "state_tokens": 25,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "Je veux annuler mon forfait, votre service ne marche pas dep",
+              "intent": "cancellation",
+              "intent_conf": 0.9955,
+              "frustration": 2.278,
+              "churn": 0.204,
+              "usage": {
+                "input_tokens": 346,
+                "output_tokens": 0,
+                "state_tokens": 20,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "\u092e\u0941\u091d\u0938\u0947 \u0926\u094b \u092c\u093e\u0930 \u0936\u0941\u0932\u094d\u0915 \u0932\u093f\u092f\u093e \u0917\u092f\u093e, \u0915\u0943\u092a\u092f\u093e \u092a\u0948\u0938\u0947 \u0935\u093e\u092a\u0938 \u0915\u0930\u0947\u0902\u0964",
+              "intent": "refund",
+              "intent_conf": 1.0,
+              "frustration": 2.2649,
+              "churn": 0.567,
+              "usage": {
+                "input_tokens": 356,
+                "output_tokens": 0,
+                "state_tokens": 22,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "Can I get pricing for 50 seats on the enterprise tier?",
+              "intent": "information",
+              "intent_conf": 0.9203,
+              "frustration": 1.9055,
+              "churn": 0.0051,
+              "usage": {
+                "input_tokens": 341,
+                "output_tokens": 0,
+                "state_tokens": 19,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "Ich kann mich seit gestern nicht einloggen, bitte helfen Sie",
+              "intent": "technical_help",
+              "intent_conf": 0.9974,
+              "frustration": 2.3696,
+              "churn": 0.0018,
+              "usage": {
+                "input_tokens": 341,
+                "output_tokens": 0,
+                "state_tokens": 19,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            }
+          ]
+        }
+      },
+      "latency": {
+        "ok": true,
+        "seconds": 1.0,
+        "result": {
+          "questions_1": {
+            "p50_ms": 5.63,
+            "mean_ms": 5.63,
+            "min_ms": 5.6,
+            "n": 10
+          },
+          "questions_5": {
+            "p50_ms": 6.31,
+            "mean_ms": 6.33,
+            "min_ms": 6.29,
+            "n": 10
+          },
+          "questions_10": {
+            "p50_ms": 8.37,
+            "mean_ms": 8.38,
+            "min_ms": 8.34,
+            "n": 10
+          },
+          "questions_50": {
+            "p50_ms": 22.64,
+            "mean_ms": 22.63,
+            "min_ms": 22.57,
+            "n": 10
+          },
+          "predict_many_32x5": {
+            "p50_ms": 67.27,
+            "mean_ms": 67.28,
+            "min_ms": 67.19,
+            "n": 5,
+            "per_question_ms": 0.42
+          }
+        }
+      },
+      "onnx": {
+        "ok": true,
+        "seconds": 16.7,
+        "result": {
+          "export": {
+            "opset": 17,
+            "quantized": true,
+            "export_seconds": 3.55,
+            "encoder": "jhu-clsp/mmBERT-base",
+            "torch": "2.11.0+cu128",
+            "inputs": [
+              "input_ids",
+              "attention_mask",
+              "marker_pos",
+              "marker_mask",
+              "qtype"
+            ],
+            "outputs": [
+              "logits",
+              "act_logits"
+            ],
+            "quantize_seconds": 1.14,
+            "quantization": "weight-only int8 (MatMulNBits, block 128, symmetric); encoder MatMul weights only, decision head and attention products fp32"
+          },
+          "fp32": {
+            "model": "model.onnx",
+            "providers": [
+              "CPUExecutionProvider"
+            ],
+            "max_abs_prob_diff": 0.0099,
+            "mean_abs_prob_diff": 0.00098,
+            "argmax_agreement": 1.0,
+            "latency_1q": {
+              "p50_ms": 26.02,
+              "mean_ms": 26.16,
+              "min_ms": 25.63,
+              "n": 10
+            },
+            "latency_5q": {
+              "p50_ms": 89.88,
+              "mean_ms": 92.05,
+              "min_ms": 87.07,
+              "n": 10
+            }
+          },
+          "int8": {
+            "model": "model.int8.onnx",
+            "providers": [
+              "CPUExecutionProvider"
+            ],
+            "max_abs_prob_diff": 0.0384,
+            "mean_abs_prob_diff": 0.00298,
+            "argmax_agreement": 1.0,
+            "latency_1q": {
+              "p50_ms": 32.84,
+              "mean_ms": 35.04,
+              "min_ms": 32.53,
+              "n": 10
+            },
+            "latency_5q": {
+              "p50_ms": 95.67,
+              "mean_ms": 100.04,
+              "min_ms": 94.32,
+              "n": 10
+            }
+          }
+        }
+      },
+      "calibrate": {
+        "ok": true,
+        "seconds": 1.7,
+        "result": {
+          "fit": {
+            "temperature": [
+              2.0730831623077393,
+              1.0,
+              1.0
+            ],
+            "temperature_by_options": {
+              "choice:11+": 2.0730831623077393
+            },
+            "n_by_bucket": {
+              "choice:11+": 438
+            }
+          },
+          "fit_report": {
+            "n": 438,
+            "before": {
+              "accuracy": 0.547945205479452,
+              "ece": 0.2784994562087328,
+              "nll": 2.0433212417018347,
+              "brier": 0.691657333209266,
+              "mean_confidence": 0.8264446616881848
+            },
+            "after": {
+              "accuracy": 0.547945205479452,
+              "ece": 0.07307413919065647,
+              "nll": 1.5191220855737944,
+              "brier": 0.5832122954469271,
+              "mean_confidence": 0.5860388704431438
+            }
+          },
+          "held_out": {
+            "n": 540,
+            "before": {
+              "accuracy": 0.4351851851851852,
+              "ece": 0.3725352462126399,
+              "nll": 2.475566304069213,
+              "brier": 0.8808749685877059,
+              "mean_confidence": 0.7922986000791162
+            },
+            "after": {
+              "accuracy": 0.4351851851851852,
+              "ece": 0.13037615126562555,
+              "nll": 1.803430729038173,
+              "brier": 0.7153268403706421,
+              "mean_confidence": 0.5403892184114457
+            }
+          },
+          "per_locale_accuracy": {
+            "en-US": 0.467,
+            "fr-FR": 0.4,
+            "de-DE": 0.422,
+            "es-ES": 0.4,
+            "hi-IN": 0.433,
+            "ja-JP": 0.489
+          },
+          "n_by_locale": {
+            "en-US": 73,
+            "fr-FR": 73,
+            "de-DE": 73,
+            "es-ES": 73,
+            "hi-IN": 73,
+            "ja-JP": 73
+          },
+          "calibration_file": "reports/trinity-prime-20260920/calibration/multilingual.json"
+        }
+      },
+      "lengths": {
+        "ok": true,
+        "seconds": 14.9,
+        "result": {
+          "trained_max_len": 1024,
+          "n": 300,
+          "settings": {
+            "max_len=512,right": {
+              "accuracy": 0.9,
+              "mean_confidence": 0.9275,
+              "ece": 0.0379,
+              "truncated_fraction": 0.093
+            },
+            "max_len=512,left": {
+              "accuracy": 0.9033,
+              "mean_confidence": 0.9268,
+              "ece": 0.0359,
+              "truncated_fraction": 0.093
+            },
+            "max_len=1024,right": {
+              "accuracy": 0.9033,
+              "mean_confidence": 0.929,
+              "ece": 0.0337,
+              "truncated_fraction": 0.01
+            },
+            "max_len=1024,left": {
+              "accuracy": 0.9033,
+              "mean_confidence": 0.9289,
+              "ece": 0.0337,
+              "truncated_fraction": 0.01
+            },
+            "max_len=2048,right": {
+              "accuracy": 0.9033,
+              "mean_confidence": 0.929,
+              "ece": 0.0337,
+              "truncated_fraction": 0.0
+            },
+            "max_len=2048,left": {
+              "accuracy": 0.9033,
+              "mean_confidence": 0.929,
+              "ece": 0.0337,
+              "truncated_fraction": 0.0
+            },
+            "max_len=4096,right": {
+              "accuracy": 0.9033,
+              "mean_confidence": 0.929,
+              "ece": 0.0337,
+              "truncated_fraction": 0.0
+            },
+            "max_len=4096,left": {
+              "accuracy": 0.9033,
+              "mean_confidence": 0.929,
+              "ece": 0.0337,
+              "truncated_fraction": 0.0
+            }
+          },
+          "review_tokens": {
+            "p50": 211,
+            "p90": 476,
+            "max": 1272
+          }
+        }
+      }
+    },
+    "typed-decisions": {
+      "load": {
+        "ok": true,
+        "seconds": 2.7,
+        "result": {
+          "load_seconds": 2.6,
+          "device": "cuda",
+          "dtype": "torch.bfloat16",
+          "fell_back_to_cpu": false,
+          "cfg": {
+            "encoder": "answerdotai/ModernBERT-large",
+            "max_len": 1024,
+            "head_max_len": 256,
+            "head_layers": 2,
+            "temperature": [
+              1.0148024559020996,
+              1.0374259948730469,
+              1.0575125217437744
+            ],
+            "temperature_by_options": {
+              "choice:3-5": 1.7601518630981445,
+              "choice:6-10": 1.0000158548355103,
+              "score:3-5": 1.2514300346374512,
+              "noul:2": 1.983399510383606,
+              "choice:11+": 0.10058280825614929,
+              "choice:2": 1.9063563346862793
+            }
+          },
+          "n_params": 421293827,
+          "vram_mb": 1617,
+          "gpu": "NVIDIA GeForce RTX 5090",
+          "samples": [
+            {
+              "state": "Hi, we were billed twice for March. Please refund the duplic",
+              "intent": "refund",
+              "intent_conf": 0.7596,
+              "frustration": 2.0817,
+              "churn": 0.6098,
+              "usage": {
+                "input_tokens": 374,
+                "output_tokens": 0,
+                "state_tokens": 26,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "The API has been returning 502s since 9am and our checkout i",
+              "intent": "technical_help",
+              "intent_conf": 0.9451,
+              "frustration": 1.9085,
+              "churn": 0.3829,
+              "usage": {
+                "input_tokens": 349,
+                "output_tokens": 0,
+                "state_tokens": 21,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "Je veux annuler mon forfait, votre service ne marche pas dep",
+              "intent": "cancellation",
+              "intent_conf": 0.5421,
+              "frustration": 2.3794,
+              "churn": 0.6659,
+              "usage": {
+                "input_tokens": 364,
+                "output_tokens": 0,
+                "state_tokens": 24,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "\u092e\u0941\u091d\u0938\u0947 \u0926\u094b \u092c\u093e\u0930 \u0936\u0941\u0932\u094d\u0915 \u0932\u093f\u092f\u093e \u0917\u092f\u093e, \u0915\u0943\u092a\u092f\u093e \u092a\u0948\u0938\u0947 \u0935\u093e\u092a\u0938 \u0915\u0930\u0947\u0902\u0964",
+              "intent": "other",
+              "intent_conf": 0.5395,
+              "frustration": 0.983,
+              "churn": 0.1664,
+              "usage": {
+                "input_tokens": 519,
+                "output_tokens": 0,
+                "state_tokens": 55,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "Can I get pricing for 50 seats on the enterprise tier?",
+              "intent": "information",
+              "intent_conf": 0.4999,
+              "frustration": 0.7475,
+              "churn": 0.0338,
+              "usage": {
+                "input_tokens": 329,
+                "output_tokens": 0,
+                "state_tokens": 17,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            },
+            {
+              "state": "Ich kann mich seit gestern nicht einloggen, bitte helfen Sie",
+              "intent": "technical_help",
+              "intent_conf": 0.7354,
+              "frustration": 1.9215,
+              "churn": 0.3378,
+              "usage": {
+                "input_tokens": 364,
+                "output_tokens": 0,
+                "state_tokens": 24,
+                "state_tokens_dropped": 0,
+                "truncated": false,
+                "truncation": "right"
+              }
+            }
+          ]
+        }
+      },
+      "latency": {
+        "ok": true,
+        "seconds": 2.0,
+        "result": {
+          "questions_1": {
+            "p50_ms": 6.88,
+            "mean_ms": 6.88,
+            "min_ms": 6.84,
+            "n": 10
+          },
+          "questions_5": {
+            "p50_ms": 9.89,
+            "mean_ms": 9.9,
+            "min_ms": 9.87,
+            "n": 10
+          },
+          "questions_10": {
+            "p50_ms": 13.1,
+            "mean_ms": 13.1,
+            "min_ms": 13.07,
+            "n": 10
+          },
+          "questions_50": {
+            "p50_ms": 44.21,
+            "mean_ms": 44.23,
+            "min_ms": 44.18,
+            "n": 10
+          },
+          "predict_many_32x5": {
+            "p50_ms": 164.54,
+            "mean_ms": 164.61,
+            "min_ms": 164.33,
+            "n": 5,
+            "per_question_ms": 1.028
+          }
+        }
+      },
+      "onnx": {
+        "ok": true,
+        "seconds": 28.8,
+        "result": {
+          "export": {
+            "opset": 17,
+            "quantized": true,
+            "export_seconds": 3.97,
+            "encoder": "answerdotai/ModernBERT-large",
+            "torch": "2.11.0+cu128",
+            "inputs": [
+              "input_ids",
+              "attention_mask",
+              "marker_pos",
+              "marker_mask",
+              "qtype"
+            ],
+            "outputs": [
+              "logits",
+              "act_logits"
+            ],
+            "quantize_seconds": 1.33,
+            "quantization": "weight-only int8 (MatMulNBits, block 128, symmetric); encoder MatMul weights only, decision head and attention products fp32"
+          },
+          "fp32": {
+            "model": "model.onnx",
+            "providers": [
+              "CPUExecutionProvider"
+            ],
+            "max_abs_prob_diff": 0.0082,
+            "mean_abs_prob_diff": 0.00141,
+            "argmax_agreement": 1.0,
+            "latency_1q": {
+              "p50_ms": 63.75,
+              "mean_ms": 70.06,
+              "min_ms": 62.37,
+              "n": 10
+            },
+            "latency_5q": {
+              "p50_ms": 238.35,
+              "mean_ms": 244.03,
+              "min_ms": 227.12,
+              "n": 10
+            }
+          },
+          "int8": {
+            "model": "model.int8.onnx",
+            "providers": [
+              "CPUExecutionProvider"
+            ],
+            "max_abs_prob_diff": 0.0192,
+            "mean_abs_prob_diff": 0.00297,
+            "argmax_agreement": 0.9667,
+            "latency_1q": {
+              "p50_ms": 86.88,
+              "mean_ms": 88.93,
+              "min_ms": 84.84,
+              "n": 10
+            },
+            "latency_5q": {
+              "p50_ms": 307.43,
+              "mean_ms": 306.22,
+              "min_ms": 272.23,
+              "n": 10
+            }
+          }
+        }
+      },
+      "lengths": {
+        "ok": true,
+        "seconds": 19.7,
+        "result": {
+          "trained_max_len": 1024,
+          "n": 300,
+          "settings": {
+            "max_len=512,right": {
+              "accuracy": 0.93,
+              "mean_confidence": 0.8912,
+              "ece": 0.0482,
+              "truncated_fraction": 0.103
+            },
+            "max_len=512,left": {
+              "accuracy": 0.93,
+              "mean_confidence": 0.8925,
+              "ece": 0.0396,
+              "truncated_fraction": 0.103
+            },
+            "max_len=1024,right": {
+              "accuracy": 0.93,
+              "mean_confidence": 0.8926,
+              "ece": 0.0465,
+              "truncated_fraction": 0.01
+            },
+            "max_len=1024,left": {
+              "accuracy": 0.93,
+              "mean_confidence": 0.893,
+              "ece": 0.0434,
+              "truncated_fraction": 0.01
+            },
+            "max_len=2048,right": {
+              "accuracy": 0.93,
+              "mean_confidence": 0.8937,
+              "ece": 0.0456,
+              "truncated_fraction": 0.0
+            },
+            "max_len=2048,left": {
+              "accuracy": 0.93,
+              "mean_confidence": 0.8937,
+              "ece": 0.0456,
+              "truncated_fraction": 0.0
+            },
+            "max_len=4096,right": {
+              "accuracy": 0.93,
+              "mean_confidence": 0.8937,
+              "ece": 0.0456,
+              "truncated_fraction": 0.0
+            },
+            "max_len=4096,left": {
+              "accuracy": 0.93,
+              "mean_confidence": 0.8937,
+              "ece": 0.0456,
+              "truncated_fraction": 0.0
+            }
+          },
+          "review_tokens": {
+            "p50": 215,
+            "p90": 485,
+            "max": 1291
+          }
+        }
+      }
+    }
+  }
+}
