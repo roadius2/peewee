@@ -84,3 +84,50 @@ def select_tool(model: Any, state: Any, tools: Mapping[str, Mapping[str, Any]],
     for name, t in tools.items():
         groups.setdefault(t.get("group") or "other", {})[name] = t.get("description")
     return hierarchical_choice(model, state, groups, instructions, question_id="tool", **predict_kw)
+
+
+def speculative_choice(
+    model: Any,
+    state: Any,
+    primary: Dict[str, Any],
+    dependents: Mapping[str, Dict[str, Any]],
+    primary_id: str = "operation",
+    **predict_kw,
+) -> Dict[str, Any]:
+    """Ask a primary choice and every option's follow-up question in ONE forward pass.
+
+    The pattern from browser-use's jev-ultrafast agent: ask "which operation?" and, at the
+    same time, "which target, if the operation is CLICK?", "which field, if it is TYPE_TEXT?",
+    and so on. Only the follow-up matching the chosen operation is used; the others cost
+    nothing extra because Laya answers every question of a call in the same pass.
+
+    `primary` is a `choice` question definition. `dependents` maps a primary option to the
+    question to ask if that option wins (options with no dependent are allowed). The result
+    holds the primary answer, the winning dependent's answer (or None), all speculative
+    answers, and the shared `usage`.
+    """
+    if primary.get("type") != "choice":
+        raise ValueError("primary must be a 'choice' question")
+    unknown = set(dependents) - set(primary["criteria"])
+    if unknown:
+        raise ValueError("dependents for options that are not in primary.criteria: %s" % sorted(unknown))
+    questions = {primary_id: primary}
+    dep_ids = {}
+    for opt, q in dependents.items():
+        qid = "%s__if_%s" % (primary_id, opt)
+        questions[qid] = q
+        dep_ids[opt] = qid
+    res = model.predict(state, questions, **predict_kw)
+    answers = res["answers"]
+    chosen = answers[primary_id]["choice"]
+    follow = answers.get(dep_ids[chosen]) if chosen in dep_ids else None
+    return {
+        "choice": chosen,
+        "confidence": answers[primary_id]["confidence"],
+        "probabilities": answers[primary_id]["probabilities"],
+        "followup": follow,
+        "followup_id": dep_ids.get(chosen),
+        "speculative": {opt: answers[qid] for opt, qid in dep_ids.items()},
+        "usage": res.get("usage", {}),
+        "result": res,
+    }

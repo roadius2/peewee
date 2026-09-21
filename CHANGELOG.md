@@ -3,6 +3,15 @@
 All notable changes to this fork. Upstream is `NandhaKishorM/laya`; this fork diverged at
 upstream v0.3.4 (`d113dca`).
 
+## 0.4.0.dev0 (unreleased): after Phase 2
+
+### Added
+- `laya.patterns.speculative_choice`: ask a primary `choice` and every option's follow-up
+  question in one forward pass, then keep only the follow-up matching the chosen option. This
+  is the "speculative fan-out" pattern from browser-use's `jev-ultrafast` agent (operation +
+  per-operation target in one request); on Laya the extra questions are free because a call
+  is one pass regardless of question count.
+
 ## 0.4.0.dev0 (unreleased): Phase 2, the decision service
 
 ### Added

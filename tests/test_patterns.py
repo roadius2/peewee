@@ -74,3 +74,55 @@ def test_select_tool_goes_hierarchical_above_threshold():
     assert out["choice"] == "t4" and out["group"] == "g1"
     assert set(m.calls[0][1]["criteria"]) == {"g0", "g1", "g2", "other"}
     assert m.calls[0][1]["criteria"]["other"] == "lonely"
+
+
+class Recording:
+    """Answers every question in one predict call, so the test can assert on the batch."""
+
+    def __init__(self, picks):
+        self.picks = picks
+        self.calls = []
+
+    def predict(self, state, questions, **kw):
+        self.calls.append((state, dict(questions), kw))
+        answers = {}
+        for qid, q in questions.items():
+            if q["type"] == "choice":
+                keys = list(q["criteria"])
+                pick = self.picks.get(qid, keys[0])
+                answers[qid] = {"type": "choice", "choice": pick, "confidence": 0.7,
+                                "probabilities": {k: (0.7 if k == pick else 0.1) for k in keys}}
+            else:
+                answers[qid] = {"type": q["type"], "noul": 0.6, "confidence": 0.6}
+        return {"answers": answers, "usage": {"input_tokens": 10}}
+
+
+def test_speculative_choice_one_call():
+    from laya.patterns import speculative_choice
+    primary = {"type": "choice", "instructions": "Next operation?",
+               "criteria": {"CLICK": None, "TYPE_TEXT": None, "WAIT": None, "DONE": None}}
+    elements = {"e1": "button Search", "e2": "textbox Origin", "e3": "link Help"}
+    deps = {"CLICK": {"type": "choice", "instructions": "Click which element?", "criteria": elements},
+            "TYPE_TEXT": {"type": "choice", "instructions": "Type into which field?", "criteria": {"e2": "textbox Origin"}}}
+    m = Recording({"operation": "CLICK", "operation__if_CLICK": "e1"})
+    out = speculative_choice(m, {"url": "x"}, primary, deps, truncate="left")
+    assert len(m.calls) == 1                                          # everything in one forward pass
+    assert set(m.calls[0][1]) == {"operation", "operation__if_CLICK", "operation__if_TYPE_TEXT"}
+    assert m.calls[0][2] == {"truncate": "left"}
+    assert out["choice"] == "CLICK" and out["followup"]["choice"] == "e1"
+    assert out["followup_id"] == "operation__if_CLICK"
+    assert set(out["speculative"]) == {"CLICK", "TYPE_TEXT"}
+    assert out["usage"] == {"input_tokens": 10}
+
+    m = Recording({"operation": "WAIT"})
+    out = speculative_choice(m, "s", primary, deps)
+    assert out["choice"] == "WAIT" and out["followup"] is None and out["followup_id"] is None
+
+
+def test_speculative_choice_validation():
+    from laya.patterns import speculative_choice
+    primary = {"type": "choice", "instructions": "?", "criteria": {"a": None}}
+    with pytest.raises(ValueError, match="not in primary"):
+        speculative_choice(Recording({}), "s", primary, {"zzz": {"type": "noul", "instructions": "?"}})
+    with pytest.raises(ValueError, match="'choice'"):
+        speculative_choice(Recording({}), "s", {"type": "noul", "instructions": "?"}, {})

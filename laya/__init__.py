@@ -21,7 +21,7 @@ from .common import (
 from .email import clean_email_body, email_state
 from .lang import analyse as detect_language
 from .lang import detect_script, is_english, register_language_detector
-from .patterns import hierarchical_choice, select_tool
+from .patterns import hierarchical_choice, select_tool, speculative_choice
 from .presets import (
     email_questions,
     guard_questions,
@@ -49,6 +49,7 @@ __all__ = [
     "target_from_label",
     "hierarchical_choice",
     "select_tool",
+    "speculative_choice",
     "normalized_entropy",
     "top_probability",
     "clean_email_body",
