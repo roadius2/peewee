@@ -42,6 +42,24 @@ sweeps. Steps can be skipped (`--skip calibrate,lengths`) or shrunk (`--per-loca
    past the trained length, the multilingual and typed-decisions defaults can be raised without
    retraining. If it collapses, Phase 3 needs the long-context fine-tune.
 
+## Phase 3: the length sweep
+
+`scripts/gpu_validate.py` step 5 runs on a random IMDB sample, which is too short to say
+anything past 1,024 tokens (1% of reviews are cut there). `scripts/length_sweep.py` is the
+targeted version:
+
+```bash
+python scripts/length_sweep.py --out reports/$(hostname)-$(date +%Y%m%d)
+```
+
+It writes `length_sweep.md` and `.json` next to the validation report, with two experiments per
+checkpoint: the 874 labelled IMDB reviews of at least 1,024 tokens at each `max_len` and
+truncation side, bucketed by review length; and short reviews placed after neutral news text so
+the state is about 900, 1,900, 3,900 and 7,900 tokens long, answered with no truncation. The
+label only depends on the review, so the second experiment isolates whether the model can still
+read past the position it was trained to, and its control run (left-truncated at the trained
+length) is what the service does today. About 15 minutes on one GPU.
+
 ## After the run
 
 - Commit `report.md` and the calibration files; open a PR against the mainline.

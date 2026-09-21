@@ -37,6 +37,10 @@ upstream v0.3.4 (`d113dca`).
   reuse them. `Agent.model_dir` records where the checkpoint was loaded from.
 
 ### Added (validation artefacts)
+- `scripts/length_sweep.py`: the Phase 3 measurement, see `docs/GPU_VALIDATION.md`. Natural long
+  IMDB reviews and short reviews behind neutral padding, per checkpoint, at each `max_len`. Result
+  in `REVIEW.md` Phase 3: the defaults stay at 1,024 because the checkpoints cannot read evidence
+  placed past their trained length (chance at 4,000 tokens), so Phase 3 is the fine-tune.
 - `reports/trinity-prime-20260920/`: the first validation report on real weights (RTX 5090),
   and `calibration/{english,multilingual}.json`, temperatures fitted on MASSIVE by
   `scripts/gpu_validate.py`. Not yet loaded by default.

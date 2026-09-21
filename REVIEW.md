@@ -257,17 +257,35 @@ context problem. Phase 4 is where the accuracy comes from.
 - Thin clients: a Python client, and a LiteLLM guardrail/router hook so existing pipelines can
   call it without new code.
 
-### Phase 3: the context problem — measured on 2026-09-20, inconclusive; see below
-Status note. `scripts/gpu_validate.py` step 5 ran on 300 IMDB test reviews for `multilingual`
-and `typed-decisions` (`reports/trinity-prime-20260920/report.md`). Both checkpoints are
-trained at `max_len` 1,024, not 512. IMDB reviews are short for this purpose (p50 about 210
-tokens, p90 about 480, max about 1,290): 9 to 10% are cut at 512, 1% at 1,024, none at 2,048
-or 4,096, so the 2,048 and 4,096 rows are identical to 1,024 and say nothing about behaviour
-past the trained length. Accuracy was flat (0.900 to 0.903 multilingual, 0.930 typed-decisions)
-and left/right truncation made no difference. Before deciding between "raise the defaults" and
-"fine-tune longer", rerun the sweep on inputs that actually exceed 1,024 tokens: filter IMDB or
-a long-document set to reviews above 1,024 tokens, or build states from real transcripts and
-tool outputs, and compare accuracy at 1,024 against 2,048 and 4,096 on that subset only.
+### Phase 3: the context problem — measured on 2026-09-20; do not raise the defaults, fine-tune
+Status note. `scripts/length_sweep.py` (`reports/trinity-prime-20260920/length_sweep.md`) ran two
+experiments per checkpoint with no retraining. The checkpoints are fine-tuned at `max_len` 1,024
+(`english` at 512).
+
+*Natural long reviews* (300 labelled IMDB reviews of 1,024 to 3,024 tokens): reading the whole
+review at 2,048 or 4,096 is never worse than truncating and gains 0 to 3 points (`english` 0.843
+to 0.867, `typed-decisions` 0.857 to 0.887, `multilingual` flat at 0.75). So longer inputs do
+not break the encoders.
+
+*Short review after neutral background* (200 short reviews behind AG News text, nothing
+truncated): accuracy falls with the distance of the evidence from the start. `english` alone
+0.925; at about 900 tokens 0.845; 1,900 tokens 0.700; 3,900 tokens 0.550; 7,900 tokens 0.485,
+which is chance. `typed-decisions` 0.930, 0.840, 0.685, 0.540, 0.530; `multilingual` 0.890,
+0.695, 0.585, 0.590, 0.530. The control that keeps only the last 1,024 tokens (what the service
+does today for list states) holds at 0.86, 0.855, 0.83, 0.81 for `english`. Two effects: neutral
+text in the state costs about 8 points even inside the trained length (distraction), and the
+model cannot read evidence past the position it was trained to (extrapolation).
+
+Decision. The defaults stay at the checkpoints' `max_len`, because raising them is harmful for
+the workloads that matter: when the decisive part of a transcript sits at the end, a longer
+window makes the model attend past its trained positions and lose it, while end-preserving
+truncation at 1,024 keeps it. The 0 to 3 point gain on natural long reviews is not worth that.
+Phase 3 is therefore the long-context fine-tune, and the training mix must contain long states
+whose evidence sits deep in the input, not just long documents. Until then: keep the end of
+transcripts, send structured state instead of raw context, and chunk-and-aggregate for inputs
+that genuinely exceed 1,024 tokens.
+
+The original plan, kept for reference:
 - **Test the encoders past their training length.** ModernBERT-large and mmBERT-base both use
   RoPE and were pre-trained to 8,192 tokens; Laya set `max_len` to 512/1,024 at fine-tuning
   time. Run the held-out suites at `max_len` 1,024, 2,048 and 4,096 with no retraining and
@@ -327,7 +345,7 @@ Carried over from the first two development sessions; see `reports/trinity-prime
   for the `choice:11+` bucket, fit on 438 MASSIVE examples, held-out ECE 0.37 to 0.13) and
   `calibration/english.json` (T = 2.44) are committed. They only cover the 11+ option bucket,
   so wiring them in `Agent._init_common` is a product decision for the owner.
-- **Phase 3 needs longer inputs** before a decision; see the Phase 3 status note above.
+- **Phase 3 is decided**: fine-tune for long context; do not raise `max_len`. See the Phase 3 status note.
 - **The CPU Docker image builds and serves as written** (1.38 GB, `python:3.11-slim`, CPU torch
   plus the server and onnx extras); the CUDA image is still unbuilt. Throughput is in
   `BENCHMARKS.md` under "Decision service throughput": about 40 questions/s on 8 CPU cores
