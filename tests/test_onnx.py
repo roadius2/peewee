@@ -76,6 +76,33 @@ def test_export_and_parity(tmp_path):
     assert [set(m["answers"]) for m in many] == [set(QS), {"angry"}]
 
 
+def _has_weight_only_quantizer():
+    try:
+        import onnxruntime.quantization.matmul_nbits_quantizer  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def test_quantize_without_the_quantizer_fails_fast_with_a_clear_message(tmp_path, monkeypatch):
+    import builtins
+
+    from laya.onnx_backend import export_onnx
+    real_import = builtins.__import__
+
+    def no_quantizer(name, *args, **kwargs):
+        if name.startswith("onnxruntime.quantization.matmul_nbits_quantizer"):
+            raise ImportError("No module named 'onnxruntime.quantization.matmul_nbits_quantizer'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_quantizer)
+    out = tmp_path / "export-q"
+    with pytest.raises(RuntimeError, match="onnxruntime>=1.22"):
+        export_onnx(tiny_agent(tmp_path), str(out), quantize=True)
+    assert not (out / "model.onnx").exists()                     # failed before the fp32 export
+
+
+@pytest.mark.skipif(not _has_weight_only_quantizer(), reason="needs onnxruntime>=1.22 and onnx-ir (Python >= 3.10)")
 def test_export_quantized(tmp_path):
     from laya.onnx_backend import OnnxAgent, export_onnx
     a = tiny_agent(tmp_path)

@@ -53,6 +53,7 @@ dev = [
     "prometheus-client>=0.20",
     "onnx>=1.15",
     "onnxruntime>=1.17",
+    "onnx-ir",
 ]
 
 [project.scripts]

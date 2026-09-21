@@ -42,6 +42,8 @@ def export_onnx(agent: Agent, out_dir: str, quantize: bool = False, opset: int =
     """
     import torch
 
+    if quantize:
+        _weight_only_quantizer()                  # fail before the (slow) fp32 export, not after it
     os.makedirs(out_dir, exist_ok=True)
     first = next(agent.model.parameters())
     orig_device, orig_dtype = first.device, first.dtype
@@ -111,6 +113,17 @@ def export_onnx(agent: Agent, out_dir: str, quantize: bool = False, opset: int =
     return meta
 
 
+def _weight_only_quantizer():
+    """The n-bit weight-only quantiser, or a clear error. It ships in onnxruntime>=1.22 (Python >= 3.10)
+    and needs `onnx-ir`; older runtimes only have a 4-bit variant."""
+    try:
+        from onnxruntime.quantization.matmul_nbits_quantizer import DefaultWeightOnlyQuantConfig, MatMulNBitsQuantizer
+    except ImportError as e:
+        raise RuntimeError("--quantize needs onnxruntime>=1.22 (Python >= 3.10) and onnx-ir: pip install 'laya[onnx]' "
+                           "(%s)" % e) from None
+    return DefaultWeightOnlyQuantConfig, MatMulNBitsQuantizer
+
+
 def _quantize_weights_int8(src: str, dst: str, block_size: int = 128) -> None:
     """Weight-only int8 for the encoder's linear layers, activations left in fp32.
 
@@ -122,7 +135,7 @@ def _quantize_weights_int8(src: str, dst: str, block_size: int = 128) -> None:
     The decision head is left in fp32 because it is small and it is where calibration lives.
     """
     import onnx
-    from onnxruntime.quantization.matmul_nbits_quantizer import DefaultWeightOnlyQuantConfig, MatMulNBitsQuantizer
+    DefaultWeightOnlyQuantConfig, MatMulNBitsQuantizer = _weight_only_quantizer()
 
     model = onnx.load(src)
     head = [n.name for n in model.graph.node if n.op_type in ("MatMul", "Gemm") and not n.name.startswith("/encoder")]
