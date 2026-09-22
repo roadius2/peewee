@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from laya.calibrate import (
+from peewee_decide.calibrate import (
     calibration_report,
     collect_records,
     fit_one_temperature,

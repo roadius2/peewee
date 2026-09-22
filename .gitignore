@@ -54,6 +54,6 @@ CLAUDE.local.md
 reports/*/onnx/
 .venv/
 
-# training data and runs (laya prepare-data / laya train)
+# training data and runs (peewee prepare-data / peewee train)
 /data/
 /runs/

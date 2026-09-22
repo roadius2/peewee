@@ -1,7 +1,7 @@
 """Hierarchical choice and tool selection over a scripted model."""
 import pytest
 
-from laya.patterns import hierarchical_choice, select_tool
+from peewee_decide.patterns import hierarchical_choice, select_tool
 
 
 class Scripted:
@@ -98,7 +98,7 @@ class Recording:
 
 
 def test_speculative_choice_one_call():
-    from laya.patterns import speculative_choice
+    from peewee_decide.patterns import speculative_choice
     primary = {"type": "choice", "instructions": "Next operation?",
                "criteria": {"CLICK": None, "TYPE_TEXT": None, "WAIT": None, "DONE": None}}
     elements = {"e1": "button Search", "e2": "textbox Origin", "e3": "link Help"}
@@ -120,7 +120,7 @@ def test_speculative_choice_one_call():
 
 
 def test_speculative_choice_validation():
-    from laya.patterns import speculative_choice
+    from peewee_decide.patterns import speculative_choice
     primary = {"type": "choice", "instructions": "?", "criteria": {"a": None}}
     with pytest.raises(ValueError, match="not in primary"):
         speculative_choice(Recording({}), "s", primary, {"zzz": {"type": "noul", "instructions": "?"}})

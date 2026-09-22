@@ -46,9 +46,9 @@ TINY_WORDS = sorted(set(POS_WORDS + NEG_WORDS + (
 
 @pytest.fixture(scope="session")
 def tiny_base(tmp_path_factory):
-    """A complete, loadable Laya checkpoint: tiny random BERT encoder, real word-level tokenizer.
+    """A complete, loadable Peewee checkpoint: tiny random BERT encoder, real word-level tokenizer.
 
-    No weights are downloaded. `laya.Agent(tiny_base, device="cpu")` loads it end to end.
+    No weights are downloaded. `peewee_decide.Agent(tiny_base, device="cpu")` loads it end to end.
     """
     import json
 
@@ -57,7 +57,7 @@ def tiny_base(tmp_path_factory):
     from tokenizers import Tokenizer, models, normalizers, pre_tokenizers
     from transformers import BertConfig, PreTrainedTokenizerFast
 
-    from laya.common import build_model
+    from peewee_decide.common import build_model
 
     d = tmp_path_factory.mktemp("tiny-base")
     vocab = {w: i for i, w in enumerate(["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"] + TINY_WORDS)}

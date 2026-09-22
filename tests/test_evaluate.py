@@ -1,9 +1,9 @@
-"""laya.evaluate: metrics on a stub agent, and the eval command on the tiny checkpoint."""
+"""peewee_decide.evaluate: metrics on a stub agent, and the eval command on the tiny checkpoint."""
 import json
 
 import pytest
 
-from laya.evaluate import evaluate, load_model_for_eval, main as eval_main
+from peewee_decide.evaluate import evaluate, load_model_for_eval, main as eval_main
 from tests.conftest import toy_records
 
 CHOICE = {"type": "choice", "instructions": "Which team?", "criteria": {"a": None, "b": None, "c": None}}
@@ -47,29 +47,29 @@ def test_metrics_use_the_label_as_reference_and_the_noul_threshold():
 
 
 def test_load_model_for_eval_accepts_a_checkpoint_directory(tiny_base):
-    from laya.agent import Agent
+    from peewee_decide.agent import Agent
     agent = load_model_for_eval(tiny_base, device="cpu")
     assert isinstance(agent, Agent)
 
 
 def test_load_model_for_eval_routes_a_hub_repo_id_through_resolve_base(tiny_base, monkeypatch):
-    import laya.train as lt
+    import peewee_decide.train as lt
     calls = []
 
     def fake_resolve_base(base, token=None):
         calls.append(base)
-        from laya.agent import resolve_checkpoint
+        from peewee_decide.agent import resolve_checkpoint
         return resolve_checkpoint(tiny_base)
 
     monkeypatch.setattr(lt, "resolve_base", fake_resolve_base)
-    from laya.agent import Agent
+    from peewee_decide.agent import Agent
     agent = load_model_for_eval("convaiinnovations/laya-typed-decisions", device="cpu")
     assert isinstance(agent, Agent)
     assert calls == ["convaiinnovations/laya-typed-decisions"]
 
 
 def test_eval_command_on_the_tiny_checkpoint(tiny_base, tmp_path, capsys):
-    from laya.data import write_jsonl
+    from peewee_decide.data import write_jsonl
     data = str(tmp_path / "cases.jsonl")
     write_jsonl(data, toy_records(6))
     out = str(tmp_path / "report.json")

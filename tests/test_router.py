@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from laya.router import (
+from peewee_decide.router import (
     BUNDLE_REPO,
     DEFAULT_MODELS,
     STANDALONE_MODELS,
@@ -176,7 +176,7 @@ def test_lru_eviction(stub_build):
 
 def test_eviction_is_logged(stub_build, caplog):
     r = Router(max_loaded=1)
-    with caplog.at_level(logging.WARNING, logger="laya.router"):
+    with caplog.at_level(logging.WARNING, logger="peewee_decide.router"):
         r.load("english")
         assert not caplog.records
         r.load("multilingual")

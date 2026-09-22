@@ -1,16 +1,29 @@
 # Changelog
 
-All notable changes to this fork. Upstream is `NandhaKishorM/laya`; this fork diverged at
+All notable changes to Peewee. It began as a fork of `NandhaKishorM/laya`, diverging at
 upstream v0.3.4 (`d113dca`).
 
-## 0.4.0.dev0 (unreleased): after Phase 2
+## 0.4.0.dev0 (unreleased): Peewee
+
+### Changed
+- **The project is now Peewee.** The fork has its own name, README and banner
+  (`docs/assets/peewee-banner.svg`), and is managed here rather than tracked against upstream
+  branding. Concretely: the Python package is `peewee_decide` (was `laya`), the distribution is
+  `peewee-decide`, the console script is `peewee` (`peewee serve|train|eval|export-onnx|prepare-data`),
+  service environment variables are `PEEWEE_*` (was `LAYA_*`), loggers are `peewee`, `peewee.router`,
+  `peewee.serving`, `peewee.onnx` and `peewee.train`, Prometheus metrics are `peewee_*`, the service
+  response `model` field is `peewee-rl-agent`, and `LayaClient` / `LayaServiceError` are
+  `PeeweeClient` / `PeeweeServiceError`. Upstream checkpoint ids (`convaiinnovations/laya`, and the
+  `laya`, `laya-multilingual`, `laya-typed-decisions` routing aliases) are unchanged — they name
+  someone else's artefacts. Upstream's Laya brand assets were removed from `assets/`; the upstream
+  notebook and the full commit history stay. Attribution is in `NOTICE` and the README footnote.
 
 ### Added
 - Mixed-dataset training is the best recipe measured so far: typed-decisions upsampled 4x plus
   Open-Jev (mix-v1) scores 0.8005 on typed-decisions test — above the published checkpoint's
   0.7685 — while matching the Open-Jev specialist on Open-Jev test (0.9403) and OOD (0.8310).
   Evidence in `reports/trinity-prime-20260922/`, write-up in `BENCHMARKS.md`.
-- `laya train` mixes datasets and chooses what calibration fits to. `--data` repeats, and
+- `peewee train` mixes datasets and chooses what calibration fits to. `--data` repeats, and
   `--data FILE:N` upsamples that file's training cases N times per epoch (after the held-out
   split). `--calib-data FILE` calibrates on a given file, such as Open-Jev's official calibration
   split, instead of holding out part of `--data`; overlapping ids or groups are rejected.
@@ -18,42 +31,42 @@ upstream v0.3.4 (`d113dca`).
   distribution (the default, `probabilities`): fitting to the teacher raised typed-decisions'
   hard-label ECE from 0.170 to 0.184. `train_meta.json` records every data file's hash, the
   calibration file, and training items before and after upsampling.
-- `laya.patterns.speculative_choice`: ask a primary `choice` and every option's follow-up
+- `peewee_decide.patterns.speculative_choice`: ask a primary `choice` and every option's follow-up
   question in one forward pass, then keep only the follow-up matching the chosen option. This
   is the "speculative fan-out" pattern from browser-use's `jev-ultrafast` agent (operation +
-  per-operation target in one request); on Laya the extra questions are free because a call
+  per-operation target in one request); on Peewee the extra questions are free because a call
   is one pass regardless of question count.
 
 ## 0.4.0.dev0 (unreleased): Phase 2, the decision service
 
 ### Added
-- **`laya train`** (`laya/train.py`): the notebook's RLCD fine-tuning loop as a tested single-GPU
-  command. Reads JSONL cases (`laya/data.py`), holds out whole cases for calibration, trains in
+- **`peewee train`** (`peewee_decide/train.py`): the notebook's RLCD fine-tuning loop as a tested single-GPU
+  command. Reads JSONL cases (`peewee_decide/data.py`), holds out whole cases for calibration, trains in
   bf16 where the GPU supports it, fits per-bucket temperatures on the held-out cases, and writes a
   checkpoint the runtime loads plus `train_meta.json`. Unlike the notebook it trains at the
   configured `max_len` instead of preprocessing at the base's shorter length, and it never fits
   temperatures on training data. Reproduces the published typed-decisions checkpoint on one RTX
   5090 in 5 minutes: 0.7560 accuracy against the published checkpoint's 0.7685 under the same
   eval code (`BENCHMARKS.md`).
-- **`laya eval`** (`laya/evaluate.py`): accuracy, soft accuracy, Brier score, ECE and latency per
+- **`peewee eval`** (`peewee_decide/evaluate.py`): accuracy, soft accuracy, Brier score, ECE and latency per
   question type and workflow for any checkpoint on JSONL cases.
-- **`laya prepare-data typed-decisions`**: writes the public typed-decisions dataset as JSONL,
-  keeping both the teacher distribution and the hard label. `pip install "laya[train]"`.
-  `laya prepare-data open-jev` does the same for the public Open-Jev dataset (CC0, pinned
+- **`peewee prepare-data typed-decisions`**: writes the public typed-decisions dataset as JSONL,
+  keeping both the teacher distribution and the hard label. `pip install "peewee-decide[train]"`.
+  `peewee prepare-data open-jev` does the same for the public Open-Jev dataset (CC0, pinned
   revision), and the calibration split keeps variants of one case together. Training oj-v1 on
   this data is written up in `BENCHMARKS.md` under "Training on Open-Jev (fork, 2026-09-21)".
-- **`laya serve`** (`laya/serving.py`): a FastAPI service around a preloaded `Router` with one
+- **`peewee serve`** (`peewee_decide/serving.py`): a FastAPI service around a preloaded `Router` with one
   `DynamicBatcher` per checkpoint. Requests are routed in pure Python, queued per checkpoint, and
-  flushed into `Agent.predict_many` when `LAYA_MAX_BATCH` questions are waiting or
-  `LAYA_MAX_WAIT_MS` has passed. Endpoints: `POST /v1/decide`, `POST /v1/decide/batch`,
+  flushed into `Agent.predict_many` when `PEEWEE_MAX_BATCH` questions are waiting or
+  `PEEWEE_MAX_WAIT_MS` has passed. Endpoints: `POST /v1/decide`, `POST /v1/decide/batch`,
   `GET /healthz`, `GET /readyz`, `GET /metrics` (Prometheus). Optional bearer auth
-  (`LAYA_API_KEY`), state size limit, per-checkpoint calibration files, default truncation side.
-  Inference runs in a thread pool (`LAYA_WORKERS`, default 1) so the event loop keeps accepting.
-- **`laya.client.LayaClient`**: standard-library HTTP client with `decide`, `decide_many`, `health`.
-- **ONNX export and runtime** (`laya/onnx_backend.py`): `laya export-onnx <checkpoint> <dir>
+  (`PEEWEE_API_KEY`), state size limit, per-checkpoint calibration files, default truncation side.
+  Inference runs in a thread pool (`PEEWEE_WORKERS`, default 1) so the event loop keeps accepting.
+- **`peewee_decide.client.LayaClient`**: standard-library HTTP client with `decide`, `decide_many`, `health`.
+- **ONNX export and runtime** (`peewee_decide/onnx_backend.py`): `peewee export-onnx <checkpoint> <dir>
   [--quantize]` writes a self-contained export directory; `OnnxAgent(dir)` is an `Agent` whose
   forward pass runs in ONNX Runtime (CUDA when available, else CPU) with the same `predict` and
-  `predict_many` API. `LAYA_BACKEND=onnx` serves exports. The decision head's attention has an
+  `predict_many` API. `PEEWEE_BACKEND=onnx` serves exports. The decision head's attention has an
   explicit, shape-dynamic implementation used during export because PyTorch's fused
   encoder-layer fast path bakes the sample sequence length into the graph.
 - **Docker**: `docker/Dockerfile` (CPU), `docker/Dockerfile.cuda`, `docker/compose.yml`, with
@@ -61,7 +74,7 @@ upstream v0.3.4 (`d113dca`).
 - **`scripts/loadtest.py`**: concurrency load test reporting p50/p95/p99 and throughput.
 - **`examples/litellm_guardrail.py`**: a LiteLLM pre-call guardrail and a model-picking helper
   that call the service.
-- `pip install "laya[server]"`, `"laya[onnx]"`, and a `laya` console script (`serve`,
+- `pip install "peewee-decide[server]"`, `"peewee-decide[onnx]"`, and a `peewee` console script (`serve`,
   `export-onnx`).
 
 ### Changed
@@ -82,10 +95,10 @@ upstream v0.3.4 (`d113dca`).
   `scripts/gpu_validate.py`. Not yet loaded by default.
 
 ### Fixed
-- `DynamicBatcher` now batches under load. Flushes were purely timer-driven (`LAYA_MAX_WAIT_MS`
+- `DynamicBatcher` now batches under load. Flushes were purely timer-driven (`PEEWEE_MAX_WAIT_MS`
   after the first queued request), so once the inference worker was busy the timer kept slicing
   the queue into passes of one or two requests that then waited behind each other. Arrivals now
-  accumulate while a pass runs (one per `LAYA_WORKERS`) and go out together the moment it
+  accumulate while a pass runs (one per `PEEWEE_WORKERS`) and go out together the moment it
   finishes. On an RTX 5090 with 32 concurrent clients this took the service from 467 to 1,338
   questions/s and p50 from 229 to 77 ms; numbers in `BENCHMARKS.md`.
 - `--quantize` now writes a weight-only int8 export (`MatMulNBits` on the encoder's linear
@@ -98,8 +111,8 @@ upstream v0.3.4 (`d113dca`).
 - `OnnxAgent` no longer drops to CPU quietly. An explicit `providers` list naming a provider the
   runtime lacks raises at construction, and the automatic choice logs a warning when torch can see
   a CUDA device but the installed `onnxruntime` wheel has no CUDA provider. The service maps
-  `LAYA_DEVICE` onto the ONNX backend (`providers_for_device`), so `LAYA_DEVICE=cuda` with
-  `LAYA_BACKEND=onnx` fails at startup instead of serving from CPU.
+  `PEEWEE_DEVICE` onto the ONNX backend (`providers_for_device`), so `PEEWEE_DEVICE=cuda` with
+  `PEEWEE_BACKEND=onnx` fails at startup instead of serving from CPU.
 - `export_onnx` moved the caller's model to fp32 on CPU for tracing and left it there, so the
   next `predict` on a CUDA agent failed with a device mismatch. The model is moved back to its
   original device and dtype after export (found on the first real GPU run).
@@ -112,26 +125,26 @@ upstream v0.3.4 (`d113dca`).
 ### Added
 - **Truncation reporting.** `usage` now carries `state_tokens`, `state_tokens_dropped`,
   `truncated` and `truncation` (`"left"` or `"right"`). `predict(..., truncate="left")` keeps the
-  end of an over-long state; `laya.load(..., truncate=...)` sets the default. With no setting,
+  end of an over-long state; `peewee_decide.load(..., truncate=...)` sets the default. With no setting,
   strings and dicts keep their start and lists (conversation transcripts) keep their end. The
   first truncation on an agent is logged at WARNING, later ones at DEBUG.
 - **Option-budget reporting.** Questions whose options were squeezed below the 48-token cap to
   fit `head_max_len`, or whose option text exceeded the cap, are listed in
   `usage["option_budget"]` with the tokens per option actually used, and logged once.
   `build_sequence(..., return_info=True)` exposes the same detail.
-- **Calibration API** (`laya.calibrate`, based on upstream PR #19 by mvanhorn):
+- **Calibration API** (`peewee_decide.calibrate`, based on upstream PR #19 by mvanhorn):
   `collect_records` runs labelled `(state, questions, labels)` examples through an agent,
   `fit_temperature_map` fits one temperature per question type and per option-count bucket by
   NLL, `calibration_report` gives accuracy / ECE / NLL / Brier before and after, and
   `Agent.fit_temperatures`, `save_calibration`, `load_calibration` and
-  `laya.load(..., calibration=path)` apply and persist the result. Labels may be an option
+  `peewee_decide.load(..., calibration=path)` apply and persist the result. Labels may be an option
   key, a score level (fractional levels split between neighbours), a bool, a probability or a
   distribution.
 - **Batch API.** `Agent.predict_many(requests, max_batch=64)` collates every question of every
   request into as few forward passes as possible and returns per-request results in order.
-- **`laya.patterns`**: `hierarchical_choice` (pick a group, then pick within it) and
+- **`peewee_decide.patterns`**: `hierarchical_choice` (pick a group, then pick within it) and
   `select_tool` (flat up to `max_flat` tools, grouped above that).
-- **Language-detector plug-in.** `laya.register_language_detector(fn)` routes the Latin-script
+- **Language-detector plug-in.** `peewee_decide.register_language_detector(fn)` routes the Latin-script
   guess through an external detector such as lingua or fastText.
 - `score` answers include `level`, the argmax level, next to the expected `score`.
 
@@ -166,7 +179,7 @@ upstream v0.3.4 (`d113dca`).
 - Tokenizer-config patching no longer writes into the shared Hugging Face cache. When a
   checkpoint's `tokenizer_config.json` needs patching, the tokenizer folder is copied to a
   per-process temporary directory and patched there. Failures are logged, not swallowed.
-- Removed the duplicate `email_questions` from `laya.email`; `laya.presets` is the single
+- Removed the duplicate `email_questions` from `peewee_decide.email`; `peewee_decide.presets` is the single
   definition and is what the package exports.
 
 ### Changed
@@ -177,11 +190,11 @@ upstream v0.3.4 (`d113dca`).
   instead of silently moving a shared model to CPU for the rest of the process. The load-time
   fallback (model does not fit on the requested device at construction) is kept and reported
   via `logging` and `Agent.fell_back_to_cpu`.
-- All warnings go through the `laya` and `laya.router` loggers instead of `print`.
+- All warnings go through the `peewee` and `peewee.router` loggers instead of `print`.
 - `Agent.system_one` is split into `_build_items` (tokenise), `_forward_logits` (one forward
   pass) and `_postprocess` (temperature, confidence, labels) so the pre- and post-processing
   can be tested without weights and so a batch API can reuse the same pieces.
-- Version is single-sourced from `laya.__version__`; `setup.py` is removed.
+- Version is single-sourced from `peewee_decide.__version__`; `setup.py` is removed.
 - Python 3.8 dropped from the supported range (upstream CI never tested it).
 
 ### Tests and CI
@@ -191,4 +204,4 @@ upstream v0.3.4 (`d113dca`).
   on `Agent.__init__` source text are gone.
 - Known gap recorded as a strict `xfail`: short French, Spanish and German sentences still
   route to the English checkpoint (Phase 1).
-- CI and release workflows run `python -m pytest` and read the version from `laya/__init__.py`.
+- CI and release workflows run `python -m pytest` and read the version from `peewee_decide/__init__.py`.

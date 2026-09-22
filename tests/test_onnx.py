@@ -7,8 +7,8 @@ import pytest
 torch = pytest.importorskip("torch")
 pytest.importorskip("onnxruntime")
 
-from laya.agent import Agent  # noqa: E402
-from laya.common import DecisionModel  # noqa: E402
+from peewee_decide.agent import Agent  # noqa: E402
+from peewee_decide.common import DecisionModel  # noqa: E402
 from tests.conftest import FakeTokenizer  # noqa: E402
 
 VOCAB = 100
@@ -47,7 +47,7 @@ QS = {"dept": {"type": "choice", "instructions": "Which team?", "criteria": {"bi
 
 
 def test_export_and_parity(tmp_path):
-    from laya.onnx_backend import OnnxAgent, export_onnx
+    from peewee_decide.onnx_backend import OnnxAgent, export_onnx
     a = tiny_agent(tmp_path)
     out = str(tmp_path / "export")
     meta = export_onnx(a, out, quantize=False)
@@ -87,7 +87,7 @@ def _has_weight_only_quantizer():
 def test_quantize_without_the_quantizer_fails_fast_with_a_clear_message(tmp_path, monkeypatch):
     import builtins
 
-    from laya.onnx_backend import export_onnx
+    from peewee_decide.onnx_backend import export_onnx
     real_import = builtins.__import__
 
     def no_quantizer(name, *args, **kwargs):
@@ -104,7 +104,7 @@ def test_quantize_without_the_quantizer_fails_fast_with_a_clear_message(tmp_path
 
 @pytest.mark.skipif(not _has_weight_only_quantizer(), reason="needs onnxruntime>=1.22 and onnx-ir (Python >= 3.10)")
 def test_export_quantized(tmp_path):
-    from laya.onnx_backend import OnnxAgent, export_onnx
+    from peewee_decide.onnx_backend import OnnxAgent, export_onnx
     a = tiny_agent(tmp_path)
     out = str(tmp_path / "export-q")
     meta = export_onnx(a, out, quantize=True)
@@ -130,7 +130,7 @@ def test_export_quantized(tmp_path):
 
 
 def test_missing_export_dir_raises(tmp_path):
-    from laya.onnx_backend import OnnxAgent
+    from peewee_decide.onnx_backend import OnnxAgent
     (tmp_path / "rl_agent_config.json").write_text('{"encoder": "x", "head_layers": 1}')
     with pytest.raises(FileNotFoundError, match="export-onnx"):
         OnnxAgent(str(tmp_path), tokenizer=TinyTokenizer())
@@ -146,7 +146,7 @@ def _accelerator():
 
 def test_export_restores_model_dtype(tmp_path):
     """Export needs an fp32 CPU copy; the caller's agent must come back unchanged."""
-    from laya.onnx_backend import export_onnx
+    from peewee_decide.onnx_backend import export_onnx
     a = tiny_agent(tmp_path)
     a.model = a.model.to(torch.bfloat16)
     a.dtype = torch.bfloat16
@@ -157,7 +157,7 @@ def test_export_restores_model_dtype(tmp_path):
 
 @pytest.mark.skipif(_accelerator() is None, reason="needs a CUDA or MPS device")
 def test_export_restores_model_device(tmp_path):
-    from laya.onnx_backend import export_onnx
+    from peewee_decide.onnx_backend import export_onnx
     a = tiny_agent(tmp_path)
     a.device = _accelerator()
     a.model = a.model.to(a.device)
@@ -167,7 +167,7 @@ def test_export_restores_model_device(tmp_path):
 
 
 def _exported(tmp_path):
-    from laya.onnx_backend import export_onnx
+    from peewee_decide.onnx_backend import export_onnx
     out = str(tmp_path / "export")
     export_onnx(tiny_agent(tmp_path), out, quantize=False)
     return out
@@ -176,7 +176,7 @@ def _exported(tmp_path):
 def test_requested_provider_missing_raises(tmp_path, monkeypatch):
     """An explicit provider that the runtime lacks is a startup error, not a silent CPU run."""
     import onnxruntime as ort
-    from laya.onnx_backend import OnnxAgent
+    from peewee_decide.onnx_backend import OnnxAgent
     out = _exported(tmp_path)
     monkeypatch.setattr(ort, "get_available_providers", lambda: ["CPUExecutionProvider"])
     with pytest.raises(RuntimeError, match="CUDAExecutionProvider"):
@@ -186,18 +186,18 @@ def test_requested_provider_missing_raises(tmp_path, monkeypatch):
 def test_auto_provider_warns_when_cuda_is_only_missing_from_onnxruntime(tmp_path, monkeypatch, caplog):
     import logging
     import onnxruntime as ort
-    from laya.onnx_backend import OnnxAgent
+    from peewee_decide.onnx_backend import OnnxAgent
     out = _exported(tmp_path)
     monkeypatch.setattr(ort, "get_available_providers", lambda: ["CPUExecutionProvider"])
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
-    with caplog.at_level(logging.WARNING, logger="laya.onnx"):
+    with caplog.at_level(logging.WARNING, logger="peewee.onnx"):
         o = OnnxAgent(out, tokenizer=TinyTokenizer())
     assert o.providers == ["CPUExecutionProvider"]
     assert any("onnxruntime-gpu" in r.getMessage() for r in caplog.records)
 
 
 def test_providers_for_device():
-    from laya.onnx_backend import providers_for_device
+    from peewee_decide.onnx_backend import providers_for_device
     assert providers_for_device("cuda") == ["CUDAExecutionProvider"]
     assert providers_for_device("cuda:0") == ["CUDAExecutionProvider"]
     assert providers_for_device("cpu") == ["CPUExecutionProvider"]

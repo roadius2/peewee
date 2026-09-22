@@ -33,8 +33,8 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import numpy as np  # noqa: E402
 
-import laya  # noqa: E402
-from laya.calibrate import collect_records, fit_temperature_map  # noqa: E402
+import peewee_decide  # noqa: E402
+from peewee_decide.calibrate import collect_records, fit_temperature_map  # noqa: E402
 
 CHECKPOINTS = {
     "english": ("convaiinnovations/laya", None),
@@ -94,7 +94,7 @@ def step(report: Dict[str, Any], name: str, fn):
 def do_load(name, device):
     repo, sub = CHECKPOINTS[name]
     t0 = time.perf_counter()
-    agent = laya.load(repo, subfolder=sub, device=device)
+    agent = peewee_decide.load(repo, subfolder=sub, device=device)
     load_s = time.perf_counter() - t0
     out = {"load_seconds": round(load_s, 1), "device": str(agent.device), "dtype": str(agent.dtype),
            "fell_back_to_cpu": agent.fell_back_to_cpu, "cfg": {k: agent.cfg.get(k) for k in
@@ -107,7 +107,7 @@ def do_load(name, device):
             out["gpu"] = torch.cuda.get_device_name(0)
     except Exception:
         pass
-    qs = laya.triage_questions()
+    qs = peewee_decide.triage_questions()
     out["samples"] = []
     for st in SAMPLE_STATES:
         r = agent.predict(st, qs)
@@ -121,7 +121,7 @@ def do_load(name, device):
 # ---------------------------------------------------------------------------- 2. latency
 def do_latency(agent):
     st = SAMPLE_STATES[0]
-    base = laya.triage_questions()
+    base = peewee_decide.triage_questions()
     out = {}
     for n in (1, 5, 10, 50):
         qs = {}
@@ -140,11 +140,11 @@ def do_latency(agent):
 
 # ---------------------------------------------------------------------------- 3. onnx
 def do_onnx(agent, name, out_dir):
-    from laya.onnx_backend import OnnxAgent, export_onnx
+    from peewee_decide.onnx_backend import OnnxAgent, export_onnx
     d = os.path.join(out_dir, "onnx", name)
     meta = export_onnx(agent, d, quantize=True)
     res = {"export": meta}
-    qs = laya.triage_questions()
+    qs = peewee_decide.triage_questions()
     states = SAMPLE_STATES * 4
     ref = [agent.predict(s, qs) for s in states]
     for variant, prefer in (("fp32", False), ("int8", True)):
@@ -198,7 +198,7 @@ def do_calibrate(agent, name, out_dir, per_locale):
     recs = collect_records(agent, [(s, q, lab) for s, q, lab, _ in fit_ex], batch_size=32)
     fit = fit_temperature_map(recs)
     test_recs = collect_records(agent, [(s, q, lab) for s, q, lab, _ in test_ex], batch_size=32)
-    from laya.calibrate import calibration_report
+    from peewee_decide.calibrate import calibration_report
     held_out = calibration_report(test_recs, fit["temperature"], fit["temperature_by_options"])
     agent.fit_temperatures(recs)
     os.makedirs(os.path.join(out_dir, "calibration"), exist_ok=True)
@@ -242,7 +242,7 @@ def do_lengths(agent, n_samples, lengths):
                 acc = float(np.mean(correct))
                 out["settings"]["max_len=%d,%s" % (L, side)] = {
                     "accuracy": round(acc, 4), "mean_confidence": round(float(np.mean(conf)), 4),
-                    "ece": round(laya.ece_score(np.asarray(conf), np.asarray(correct, dtype=float)), 4),
+                    "ece": round(peewee_decide.ece_score(np.asarray(conf), np.asarray(correct, dtype=float)), 4),
                     "truncated_fraction": round(truncated / n_samples, 3)}
                 print("   max_len=%d %-5s acc=%.3f truncated=%.0f%%" % (L, side, acc, 100 * truncated / n_samples), flush=True)
     finally:
@@ -253,8 +253,8 @@ def do_lengths(agent, n_samples, lengths):
 
 # ---------------------------------------------------------------------------- report
 def to_markdown(rep: Dict[str, Any]) -> str:
-    L = ["# GPU validation report", "", "host: `%s`  python: %s  torch: %s  laya: %s  date: %s" % (
-        rep["env"]["host"], rep["env"]["python"], rep["env"]["torch"], rep["env"]["laya"], rep["env"]["date"]), ""]
+    L = ["# GPU validation report", "", "host: `%s`  python: %s  torch: %s  peewee: %s  date: %s" % (
+        rep["env"]["host"], rep["env"]["python"], rep["env"]["torch"], rep["env"]["peewee"], rep["env"]["date"]), ""]
     for name, r in rep["checkpoints"].items():
         L += ["## %s" % name, ""]
         for stepname, sr in r.items():
@@ -313,7 +313,7 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     import torch
     rep: Dict[str, Any] = {"env": {"host": platform.node(), "python": platform.python_version(), "torch": torch.__version__,
-                                   "laya": laya.__version__, "cuda": torch.cuda.is_available(),
+                                   "peewee": peewee_decide.__version__, "cuda": torch.cuda.is_available(),
                                    "date": time.strftime("%Y-%m-%d %H:%M")}, "args": vars(args), "checkpoints": {}}
     for name in [m.strip() for m in args.models.split(",") if m.strip()]:
         r: Dict[str, Any] = {}

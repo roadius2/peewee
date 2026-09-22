@@ -6,8 +6,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from laya.router import Router
-from laya.serving import DecisionService, DynamicBatcher, Metrics, Settings, create_app
+from peewee_decide.router import Router
+from peewee_decide.serving import DecisionService, DynamicBatcher, Metrics, Settings, create_app
 
 Q = {"dept": {"type": "choice", "instructions": "Which team?", "criteria": {"billing": None, "tech": None}},
      "angry": {"type": "noul", "instructions": "Angry?"}}
@@ -174,14 +174,14 @@ def test_service_validation(stub_router):
         run(svc.decide("s", {"x": {"type": "bogus", "instructions": "?"}}))
     with pytest.raises(ValueError, match="criteria"):
         run(svc.decide("s", {"x": {"type": "choice", "instructions": "?"}}))
-    with pytest.raises(ValueError, match="LAYA_MAX_STATE_CHARS"):
+    with pytest.raises(ValueError, match="PEEWEE_MAX_STATE_CHARS"):
         run(svc.decide("x" * 21, Q))
 
 
 def test_settings_from_env():
-    s = Settings.from_env({"LAYA_MODELS": "english, typed", "LAYA_MAX_BATCH": "8", "LAYA_MAX_WAIT_MS": "2.5",
-                           "LAYA_CALIBRATION": "english=/c/en.json,multilingual=/c/ml.json", "LAYA_API_KEY": "k",
-                           "LAYA_BACKEND": "ONNX"})
+    s = Settings.from_env({"PEEWEE_MODELS": "english, typed", "PEEWEE_MAX_BATCH": "8", "PEEWEE_MAX_WAIT_MS": "2.5",
+                           "PEEWEE_CALIBRATION": "english=/c/en.json,multilingual=/c/ml.json", "PEEWEE_API_KEY": "k",
+                           "PEEWEE_BACKEND": "ONNX"})
     assert s.models == ["english", "typed"] and s.max_batch == 8 and s.max_wait_ms == 2.5
     assert s.calibration_for("english") == "/c/en.json" and s.calibration_for("typed-decisions") is None
     assert s.api_key == "k" and s.backend == "onnx"
@@ -244,7 +244,7 @@ def test_client_against_app(client):
     import io
     from urllib.error import HTTPError
 
-    from laya.client import LayaClient, LayaServiceError
+    from peewee_decide.client import PeeweeClient, PeeweeServiceError
 
     def opener(req, timeout=None):
         method = req.get_method()
@@ -259,11 +259,11 @@ def test_client_against_app(client):
             def __exit__(self, *a): return False
         return R(resp.content)
 
-    c = LayaClient("http://test", opener=opener)
+    c = PeeweeClient("http://test", opener=opener)
     assert c.health()["status"] == "ok"
     out = c.decide({"body": "charged twice"}, Q, truncate="left")
     assert out["routing"]["model"] == "english" and out["usage"]["truncation"] == "left"
     assert len(c.decide_many([{"state": "a", "questions": Q}, {"state": "b", "questions": Q}])) == 2
-    with pytest.raises(LayaServiceError) as ei:
+    with pytest.raises(PeeweeServiceError) as ei:
         c.decide("s", {})
     assert ei.value.status == 422

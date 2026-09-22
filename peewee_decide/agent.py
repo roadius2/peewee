@@ -1,4 +1,4 @@
-"""High-level inference runtime for laya System 1 decision models."""
+"""High-level inference runtime for Peewee System 1 decision models."""
 import json
 import logging
 import os
@@ -27,7 +27,7 @@ from .common import (
     top_probability,
 )
 
-logger = logging.getLogger("laya")
+logger = logging.getLogger("peewee")
 
 
 def _check_truncate(side: Optional[str]) -> Optional[str]:
@@ -79,19 +79,19 @@ def _tokenizer_dir(model_dir: str) -> Optional[str]:
         with open(cfg_file) as f:
             tcfg = json.load(f)
     except (OSError, ValueError) as e:
-        logger.warning("laya: could not read %s (%s); loading tokenizer as-is", cfg_file, e)
+        logger.warning("peewee: could not read %s (%s); loading tokenizer as-is", cfg_file, e)
         return tok_dir
     if not patch_tokenizer_config(tcfg):
         return tok_dir
     try:
-        patched = tempfile.mkdtemp(prefix="laya-tokenizer-")
+        patched = tempfile.mkdtemp(prefix="peewee-tokenizer-")
         shutil.copytree(tok_dir, patched, dirs_exist_ok=True)
         with open(os.path.join(patched, "tokenizer_config.json"), "w") as f:
             json.dump(tcfg, f, indent=2)
-        logger.debug("laya: patched tokenizer_config.json into %s", patched)
+        logger.debug("peewee: patched tokenizer_config.json into %s", patched)
         return patched
     except OSError as e:
-        logger.warning("laya: could not create a patched tokenizer copy (%s); loading as-is", e)
+        logger.warning("peewee: could not create a patched tokenizer copy (%s); loading as-is", e)
         return tok_dir
 
 
@@ -194,7 +194,7 @@ class Agent:
         calibration: Optional[str] = None,
         truncate: Optional[str] = None,
     ):
-        """Load a Laya checkpoint.
+        """Load a Peewee checkpoint.
 
         `subfolder` selects one checkpoint from a repo that bundles several, e.g.
         `Agent("convaiinnovations/laya", subfolder="multilingual")`. Only that subfolder is
@@ -218,10 +218,10 @@ class Agent:
         if device is not None:
             target_device = torch.device(device)
             if target_device.type == "cuda" and not torch.cuda.is_available():
-                logger.warning("laya: CUDA requested but not available; falling back to CPU.")
+                logger.warning("peewee: CUDA requested but not available; falling back to CPU.")
                 self.device = torch.device("cpu")
             elif target_device.type == "mps" and not (hasattr(torch.backends, "mps") and torch.backends.mps.is_available()):
-                logger.warning("laya: MPS requested but not available; falling back to CPU.")
+                logger.warning("peewee: MPS requested but not available; falling back to CPU.")
                 self.device = torch.device("cpu")
             else:
                 self.device = target_device
@@ -245,7 +245,7 @@ class Agent:
         self.model.load_state_dict(weights, strict=True)
 
         # ModernBERT's reference_compile defaults to "auto" and will torch.compile the encoder.
-        # That is a loss for the batch sizes Laya runs (a handful of questions per call) and can
+        # That is a loss for the batch sizes Peewee runs (a handful of questions per call) and can
         # hang on some platforms, so keep the eager path.
         try:
             self.model.encoder.config.reference_compile = False
@@ -277,7 +277,7 @@ class Agent:
         self.fell_back_to_cpu = fell_back_from is not None
         if self.fell_back_to_cpu:
             logger.warning(
-                "laya: could not place the model on %s, so it is running on CPU. Reason: %s. "
+                "peewee: could not place the model on %s, so it is running on CPU. Reason: %s. "
                 "Inference will be roughly 10-15x slower (~200-500 ms rather than ~35 ms). "
                 "If this is a newer NVIDIA GPU (Blackwell / RTX 50-series), your PyTorch build may "
                 "not support its CUDA architecture: "
@@ -387,7 +387,7 @@ class Agent:
         if dropped > 0:
             self._warn_once(
                 "state_truncated",
-                "laya: state of %d tokens was truncated (%s side kept); up to %d tokens dropped. "
+                "peewee: state of %d tokens was truncated (%s side kept); up to %d tokens dropped. "
                 "The result is computed on a partial state.", state_tokens, side, dropped)
         budget = {}
         for (qid, _qdef), info in zip(questions.items(), infos):
@@ -400,9 +400,9 @@ class Agent:
             if squeezed:
                 self._warn_once(
                     "options_squeezed",
-                    "laya: options of question(s) %s were cut to as few as %d tokens each to fit "
+                    "peewee: options of question(s) %s were cut to as few as %d tokens each to fit "
                     "head_max_len=%d. Accuracy degrades sharply here; raise head_max_len or use "
-                    "laya.patterns.hierarchical_choice.",
+                    "peewee_decide.patterns.hierarchical_choice.",
                     squeezed, min(budget[q]["tokens_per_option"] for q in squeezed),
                     self.cfg.get("head_max_len", 192))
         return usage
@@ -468,7 +468,7 @@ class Agent:
                 }
 
         return {
-            "model": "laya-rl-agent",
+            "model": "peewee-rl-agent",
             "answers": answers,
             "usage": self._usage(questions, items, n_tokens),
         }
@@ -527,7 +527,7 @@ class Agent:
             sel = rows[pos:pos + n]
             pos += n
             if n == 0:
-                results.append({"model": "laya-rl-agent", "answers": {}, "usage": self._usage(qs, items, 0)})
+                results.append({"model": "peewee-rl-agent", "answers": {}, "usage": self._usage(qs, items, 0)})
                 continue
             kmax = max(len(z) for z, _ in sel)
             logits = np.full((n, kmax), -1e4, dtype=np.float32)
@@ -542,7 +542,7 @@ class Agent:
 
     # ------------------------------------------------------------------ calibration
     def fit_temperatures(self, records, min_bucket_n: int = 10, report: bool = True) -> Dict[str, Any]:
-        """Fit per-type and per-bucket temperatures from `laya.calibrate.collect_records` output
+        """Fit per-type and per-bucket temperatures from `peewee_decide.calibrate.collect_records` output
         and apply them to this agent. Returns the fitted map plus a before/after report."""
         result = fit_temperature_map(records, min_bucket_n=min_bucket_n, report=report)
         self.temperature = list(result["temperature"])
@@ -570,12 +570,12 @@ RLAgent = Agent
 def load(model_id_or_path: str = "convaiinnovations/laya", device: Optional[str] = None,
          token: Optional[str] = None, subfolder: Optional[str] = None,
          calibration: Optional[str] = None, truncate: Optional[str] = None) -> Agent:
-    """Load a Laya agent.
+    """Load a Peewee agent.
 
     `subfolder` picks one checkpoint out of a repo that bundles several:
 
-        laya.load("convaiinnovations/laya")                           # English (repo root)
-        laya.load("convaiinnovations/laya", subfolder="multilingual")
+        peewee_decide.load("convaiinnovations/laya")                           # English (repo root)
+        peewee_decide.load("convaiinnovations/laya", subfolder="multilingual")
 
     `calibration` is a JSON file from `Agent.save_calibration`; `truncate` is the default
     side to cut over-long states from ("left" keeps the end).

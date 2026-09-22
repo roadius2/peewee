@@ -1,11 +1,22 @@
-ultra_laya
+Peewee (peewee-decide)
 Copyright 2026 roadius2 and contributors
 
-This product is a fork of Laya (https://github.com/NandhaKishorM/laya),
-Copyright Convai Innovations / Nandakishor M, licensed under the
-Apache License, Version 2.0. The original commit history, LICENSE and
-model checkpoints (https://huggingface.co/convaiinnovations/laya) remain
-the work of the original authors.
+This product includes software developed as Laya
+(https://github.com/NandhaKishorM/laya), Copyright Convai Innovations /
+Nandakishor M, licensed under the Apache License, Version 2.0. Peewee is a
+renamed, substantially modified derivative work: the original commit history,
+LICENSE and the published model checkpoints
+(https://huggingface.co/convaiinnovations/laya) remain the work of the
+original authors, and the base encoders Peewee fine-tunes are theirs.
+
+Peewee is not affiliated with, endorsed by or sponsored by Convai
+Innovations, TypeSafe (Jev), or the Open-Jev project. Those names are used
+only to identify the systems Peewee is compared against.
+
+Datasets: `LocalLLaMA/typed-decisions` and the Open-Jev release-v2
+redistributable split (CC0-1.0) are the property of their publishers and are
+not redistributed here; `peewee prepare-data` downloads them at a pinned
+revision.
 
 Changes in this fork are listed in CHANGELOG.md. Where a change ports an
 upstream pull request, the changelog and commit message name its author.

@@ -1,8 +1,8 @@
-"""`laya train`: fine-tune a Laya checkpoint on JSONL cases (see `laya.data`) with the RLCD objective.
+"""`peewee train`: fine-tune a Peewee checkpoint on JSONL cases (see `peewee_decide.data`) with the RLCD objective.
 
 RLCD is the upstream recipe, lifted from `notebooks/laya_finetune_typed_decisions_2xT4_kaggle.ipynb`:
 a Gaussian policy gradient over the option logits whose reward is a strictly proper scoring rule
-against the target distribution (`laya.common.proper_reward`), with a group-relative (GRPO)
+against the target distribution (`peewee_decide.common.proper_reward`), with a group-relative (GRPO)
 baseline, plus soft cross-entropy.
 """
 import argparse
@@ -25,7 +25,7 @@ from .agent import _tokenizer_dir, resolve_checkpoint
 from .common import build_model, collate_items, proper_reward
 from .data import _group_of, read_jsonl, record_to_items, reference_index, split_cases, target_vector, validate_record
 
-logger = logging.getLogger("laya.train")
+logger = logging.getLogger("peewee_decide.train")
 
 
 def sigma_for_epoch(epoch: int, epochs: int, start: float, end: float) -> float:
@@ -215,7 +215,7 @@ def _sha256(path: str) -> str:
 
 
 def _git_commit() -> Optional[str]:
-    """HEAD of the source checkout `laya` runs from, read from `.git` directly (the package never shells out)."""
+    """HEAD of the source checkout `peewee_decide` runs from, read from `.git` directly (the package never shells out)."""
     try:
         git = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".git")
         if os.path.isfile(git):                                 # worktree: ".git" names the real git dir
@@ -245,7 +245,7 @@ def _git_commit() -> Optional[str]:
 
 
 def _save_checkpoint(model, tok, cfg: Dict[str, Any], out_dir: str) -> None:
-    """Exactly what `laya.Agent` loads: fp16 safetensors, encoder config, tokenizer, rl_agent_config.json."""
+    """Exactly what `peewee_decide.Agent` loads: fp16 safetensors, encoder config, tokenizer, rl_agent_config.json."""
     from safetensors.torch import save_file
     os.makedirs(out_dir, exist_ok=True)
     sd = {k: (v.detach().half() if v.is_floating_point() else v.detach()).contiguous().cpu()
@@ -271,7 +271,7 @@ def _calibrate(out_dir: str, held: Sequence[Dict[str, Any]], device: torch.devic
 
     `target` is `calibration_target`: "probabilities" fits NLL against each question's training
     distribution (a teacher's soft labels); "label" fits against the reference answer that
-    `laya eval` scores (the hard label, else the distribution's argmax).
+    `peewee eval` scores (the hard label, else the distribution's argmax).
 
     `skipped` names the "case/qid" questions `record_to_items` dropped during training (options
     that do not fit `max_len`/`head_max_len`). Those must not be sent through the runtime, which
@@ -328,7 +328,7 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
     """
     import transformers
 
-    import laya
+    import peewee_decide
     cfg = cfg or TrainConfig()
     t_start = time.time()
     if not overwrite and any(os.path.exists(os.path.join(out_dir, n)) for n in ("model.safetensors",
@@ -365,7 +365,7 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
     if not items:
         raise ValueError("no training items")
     if all_skipped:
-        logger.warning("laya.train: skipped %d questions whose options do not fit (first: %s)",
+        logger.warning("peewee_decide.train: skipped %d questions whose options do not fit (first: %s)",
                        len(all_skipped), all_skipped[:3])
     n_unique = len(items)
     if repeat:
@@ -393,7 +393,7 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
     scaler = torch.amp.GradScaler("cuda", enabled=use_scaler)
     gen = torch.Generator(device=dev).manual_seed(cfg.seed)
     pad_id = tok.pad_token_id
-    logger.info("laya.train: %d train items from %d cases, %d held-out cases, max_len %d, %s on %s",
+    logger.info("peewee_decide.train: %d train items from %d cases, %d held-out cases, max_len %d, %s on %s",
                 len(items), len(train_recs), len(held), max_len, amp or "fp32", dev)
 
     epochs_log: List[Dict[str, Any]] = []
@@ -426,14 +426,14 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
                 sched.step()
                 step += 1
                 if step % cfg.log_every == 0:
-                    logger.info("laya.train: epoch %d step %d loss %.4f reward %.4f lr %.2e", epoch + 1, step,
+                    logger.info("peewee_decide.train: epoch %d step %d loss %.4f reward %.4f lr %.2e", epoch + 1, step,
                                 float(loss.detach()), st["reward"], sched.get_last_lr()[0])
         n = len(chunks)
         rec = {"epoch": epoch + 1, "sigma": sigma, "train_loss": sums["loss"] / n, "train_ce": sums["ce"] / n,
                "train_reward": sums["reward"] / n}
         rec.update(_heldout_metrics(model, held_items, pad_id, dev, amp, cfg.micro_batch))
         epochs_log.append(rec)
-        logger.info("laya.train: epoch %d done: %s", epoch + 1, json.dumps(rec))
+        logger.info("peewee_decide.train: epoch %d done: %s", epoch + 1, json.dumps(rec))
 
     if cfg.gradient_checkpointing and not cfg.freeze_encoder:
         model.encoder.gradient_checkpointing_disable()
@@ -451,7 +451,7 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
         out_cfg["temperature_by_options"] = calibration["temperature_by_options"]
         _write_json(os.path.join(out_dir, "rl_agent_config.json"), out_cfg)
     else:
-        logger.warning("laya.train: no held-out questions; temperatures left at 1.0")
+        logger.warning("peewee_decide.train: no held-out questions; temperatures left at 1.0")
 
     meta = {"base": base, "data": data_path, "data_sha256": _sha256s(data_path),
             "calib_data": calib_path, "calib_data_sha256": _sha256s(calib_path),
@@ -466,7 +466,7 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
             "optimizer_steps": step, "epochs": epochs_log, "calibration": calibration,
             "git_commit": _git_commit(),
             "versions": {"torch": torch.__version__, "transformers": transformers.__version__,
-                         "laya": laya.__version__},
+                         "peewee": peewee_decide.__version__},
             "wall_seconds": round(time.time() - t_start, 1)}
     _write_json(os.path.join(out_dir, "train_meta.json"), meta)
     return meta
@@ -523,9 +523,9 @@ def _data_spec(value: str) -> Tuple[str, int]:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="laya train", description="Fine-tune a Laya checkpoint on JSONL cases (RLCD).")
+    ap = argparse.ArgumentParser(prog="peewee train", description="Fine-tune a Peewee checkpoint on JSONL cases (RLCD).")
     ap.add_argument("--data", required=True, action="append", type=_data_spec, metavar="FILE[:N]",
-                    help="training cases, JSONL (schema in laya/data.py); repeat to mix files, and add :N to "
+                    help="training cases, JSONL (schema in peewee_decide/data.py); repeat to mix files, and add :N to "
                          "repeat that file's training cases N times per epoch")
     ap.add_argument("--calib-data", metavar="FILE",
                     help="held-out cases for calibration and per-epoch metrics, instead of splitting --data")

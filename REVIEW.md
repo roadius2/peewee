@@ -1,4 +1,4 @@
-# Laya v0.3.4 review and improvement plan for ultra_laya
+# Peewee v0.3.4 review and improvement plan for ultra_laya
 
 This repo starts as a verbatim copy of upstream Laya (`NandhaKishorM/laya`, commit `d113dca`,
 v0.3.4) with full history. This document is the review of that starting point and the plan
@@ -19,7 +19,7 @@ estimate.
 
 ## 1. Verdict
 
-Laya is a small, readable, honest codebase (about 1,100 lines of library code) with the right
+Peewee is a small, readable, honest codebase (about 1,100 lines of library code) with the right
 shape for a self-hosted decision model: typed questions, one forward pass, calibrated-ish
 probabilities, Apache 2.0 weights. The authors' own benchmark write-up is candid about its
 limits.
@@ -52,18 +52,18 @@ short). Item 5 is the actual project: build labelled data per workload and fine-
 
 ## 2. What is solid
 
-- **Sequence design** (`laya/common.py:49`, `build_sequence`). Options are marked with `[MASK]`
+- **Sequence design** (`peewee_decide/common.py:49`, `build_sequence`). Options are marked with `[MASK]`
   tokens and scored from their hidden states, so any number of options is handled without a
   fixed classifier head. Question type is injected via an embedding. Clean.
-- **Strict checkpoint loading** (`laya/agent.py:53`, `_verify_compatibility`). Safetensors
+- **Strict checkpoint loading** (`peewee_decide/agent.py:53`, `_verify_compatibility`). Safetensors
   only, shape-checked, `strict=True`. Good hygiene for a model you will self-host.
-- **Routing is pure and testable** (`laya/router.py`, `Router.route`). No weights loaded to
+- **Routing is pure and testable** (`peewee_decide/router.py`, `Router.route`). No weights loaded to
   decide; the decision object carries the reason. The precedence order (explicit model > task >
   workflow > lang > detection > default) is sensible.
-- **Script detection is exact** (`laya/lang.py`, `detect_script`). Non-Latin scripts always go
+- **Script detection is exact** (`peewee_decide/lang.py`, `detect_script`). Non-Latin scripts always go
   to the multilingual model, which is the case that matters most given the English model's
   confident collapse on them.
-- **Presets** (`laya/presets.py`) are a decent starting vocabulary for model routing,
+- **Presets** (`peewee_decide/presets.py`) are a decent starting vocabulary for model routing,
   guardrails, moderation and triage.
 - **CI** runs on three Python versions, lints, byte-compiles and builds the package.
 - **Benchmarks doc** does not hide the bad numbers.
@@ -75,7 +75,7 @@ short). Item 5 is the actual project: build labelled data per workload and fine-
 Ordered by impact on this project. File references are to this tree.
 
 ### 3.1 Silent truncation of state
-`laya/common.py:84`. The state is cut to whatever room remains after the option prompt, with
+`peewee_decide/common.py:84`. The state is cut to whatever room remains after the option prompt, with
 no warning and nothing in the result to say it happened. `usage.input_tokens` reports what
 was fed, not what was dropped. A `truncate_left` flag exists on `build_sequence` but `Agent`
 never exposes it, so a conversation transcript is always cut from the end, which is exactly
@@ -88,7 +88,7 @@ characters of prose or 1,200 characters of code. A single medium tool result or 
 exceeds that. This is an estimate; measure it with the real tokenizer once the hub is reachable.
 
 ### 3.2 Language guess misses short Latin-script non-English
-`laya/lang.py:133`, `guess_latin_language`. Needs at least four words, then a stop-word margin
+`peewee_decide/lang.py:133`, `guess_latin_language`. Needs at least four words, then a stop-word margin
 of two over English. Verified on this tree:
 
 | input | routed to |
@@ -108,14 +108,14 @@ English (0.657 vs 0.783 on MASSIVE) while the English model collapses on other l
 tie-break should lean multilingual for short ambiguous inputs.
 
 ### 3.3 Permanent CPU fallback on a single GPU error during inference
-`laya/agent.py:278-289`. If one request raises a `RuntimeError` whose text contains "memory"
+`peewee_decide/agent.py:278-289`. If one request raises a `RuntimeError` whose text contains "memory"
 or "cuda", the model is moved to CPU and stays there for the life of the process. Every
 subsequent request is 10 to 15 times slower and the only signal is a `print`. In a shared
 service one oversized batch degrades the whole fleet. The load-time fallback (`agent.py:203`)
 is a reasonable choice; the inference-time one is not.
 
 ### 3.4 Router is not thread-safe, and the default evicts on every language switch
-`laya/router.py:169-198`. `load`, `_touch` and `_evict` mutate `_agents` and `_order` with no
+`peewee_decide/router.py:169-198`. `load`, `_touch` and `_evict` mutate `_agents` and `_order` with no
 lock. Two threads loading different checkpoints can each build a model, then evict each
 other's. The default `max_loaded=1` (`router.py:149`) means alternating English and
 non-English traffic reloads a model per request (the README itself measures 7 to 10 seconds
@@ -127,7 +127,7 @@ transformers 4.48.0 (verified by inspecting the 4.47.1 and 4.48.0 wheels). On 4.
 the English and typed-decisions checkpoints fail to load.
 
 ### 3.6 Inconsistent `confidence` semantics across question types
-`laya/agent.py:309` and `agent.py:335`. For `choice` and `score`, confidence is normalised
+`peewee_decide/agent.py:309` and `agent.py:335`. For `choice` and `score`, confidence is normalised
 entropy, `1 - H(p)/log(k)`. For `noul` it is `max(p, 1-p)`. These are not on the same scale:
 a two-option `choice` at 0.90/0.10 has entropy-confidence 0.53, while the identical `noul` has
 confidence 0.90. The README's gating example (`if conf >= 0.85`) will behave very differently
@@ -139,7 +139,7 @@ Temperatures are read from the checkpoint config (`agent.py:194-195`) and applie
 (type, option-count) bucket, but there is no function to fit them, no way to persist a fitted
 set, and the multilingual checkpoint ships with none. The fitting code lives only in the
 Kaggle notebook. Calibration is the whole reason to prefer a probability model over an LLM
-for gating, so this belongs in `laya/`.
+for gating, so this belongs in `peewee_decide/`.
 
 ### 3.8 No batching across states
 `Agent.system_one` (`agent.py:241`) takes one state and N questions. `collate_items` already
@@ -155,20 +155,20 @@ int8 quantisation is feasible and would make the CPU path (currently 200 to 500 
 a shared service.
 
 ### 3.10 Smaller defects
-- `laya/router.py:266`: when `auto_task_detection` matches a workflow, `repo` is the raw
+- `peewee_decide/router.py:266`: when `auto_task_detection` matches a workflow, `repo` is the raw
   `(repo, subfolder)` tuple rather than the string `_repo_str` produces elsewhere. Serialises
   as a list in JSON and breaks equality with the other branches.
-- `laya/agent.py:21-46`, `_fix_tokenizer_config`: rewrites `tokenizer_config.json` inside the
+- `peewee_decide/agent.py:21-46`, `_fix_tokenizer_config`: rewrites `tokenizer_config.json` inside the
   shared Hugging Face cache on every load and swallows every exception. Should patch the
   loaded dict in memory, or copy to a private directory, and log failures.
-- `laya/email.py:56` and `laya/presets.py:45` both define `email_questions`; the package
+- `peewee_decide/email.py:56` and `peewee_decide/presets.py:45` both define `email_questions`; the package
   exports the `email.py` one. One should go.
 - `agent.py:310`, `act_probability`: an undocumented output from an "action head" whose
   meaning (`act_costs` in the training config) is nowhere explained. Either document it or
   drop it from the public result.
 - Warnings go through `print` (`agent.py:159,162,219,280`). Use `logging` or `warnings` so a
   service can route them.
-- Version string is duplicated in `pyproject.toml`, `setup.py` and `laya/__init__.py`.
+- Version string is duplicated in `pyproject.toml`, `setup.py` and `peewee_decide/__init__.py`.
   `setup.py` is redundant with `pyproject.toml`.
 - Tests are hand-rolled scripts with a global pass/fail list rather than pytest. One
   "test" (`tests/test_criteria.py`, CPU-fallback section) asserts on the source text of
@@ -194,9 +194,9 @@ a shared service.
 | Tool-result verification | Poor. Task plus result rarely fits 400 tokens. | Same as agent gating. Feed (task, result excerpt, expected shape) rather than raw output. |
 | Claude Code supervisor (route files/tests, validate progress) | Poor for diffs; fair for file-path or test-name routing. | Long context or chunk-and-aggregate; fine-tune on your own repos' history. |
 | High-throughput central service | Not present. | Phase 2 below. |
-| Specialised fine-tuned classifiers | Possible via notebook only. | `laya/train.py` with a documented dataset schema and a teacher-labelling script. |
+| Specialised fine-tuned classifiers | Possible via notebook only. | `peewee_decide/train.py` with a documented dataset schema and a teacher-labelling script. |
 
-Where Jev still wins outright: 64k context and 255 options in one call. Where Laya wins:
+Where Jev still wins outright: 64k context and 255 options in one call. Where Peewee wins:
 latency (about 7x faster per question on a T4), zero marginal cost, data never leaves your
 infrastructure, and you can fine-tune. The plan is to close the context and cardinality gaps
 enough for the workloads above, not to match Jev generally.
@@ -230,7 +230,7 @@ context problem. Phase 4 is where the accuracy comes from.
   turns) to left truncation.
 - **One confidence definition.** `confidence` becomes the calibrated top probability for every
   type. Keep entropy as `entropy` if anyone wants it. Document it.
-- **Calibration API.** `laya.calibrate(agent, examples) -> temperatures` fitting one
+- **Calibration API.** `peewee_decide.calibrate(agent, examples) -> temperatures` fitting one
   temperature per (type, option-count) bucket by NLL, `agent.save_calibration(path)`,
   `agent.load_calibration(path)`, and an `ece` report. Ship fitted temperatures for the
   multilingual checkpoint in this repo.
@@ -245,7 +245,7 @@ context problem. Phase 4 is where the accuracy comes from.
   token floor; document the hierarchical-choice pattern with a helper.
 
 ### Phase 2: the decision service — done, see `CHANGELOG.md`; verified on real weights on an RTX 5090 (2026-09-20, `reports/trinity-prime-20260920`): fp32 ONNX matches torch (argmax agreement 1.000, max probability difference 0.02), the original dynamic int8 did not (agreement 0.70 to 0.87, differences up to 0.91) and was replaced by weight-only int8, see section 7
-- `laya/server.py`: FastAPI + uvicorn, `POST /v1/decide` (single) and `POST /v1/decide/batch`,
+- `peewee_decide/server.py`: FastAPI + uvicorn, `POST /v1/decide` (single) and `POST /v1/decide/batch`,
   `GET /healthz`, `GET /metrics` (Prometheus: latency, batch size, truncation rate, routing
   counts, per-question confidence histograms).
 - **Dynamic batching.** A request queue that flushes on `max_batch` or `max_wait_ms` (start at
@@ -287,7 +287,7 @@ that genuinely exceed 1,024 tokens.
 
 The original plan, kept for reference:
 - **Test the encoders past their training length.** ModernBERT-large and mmBERT-base both use
-  RoPE and were pre-trained to 8,192 tokens; Laya set `max_len` to 512/1,024 at fine-tuning
+  RoPE and were pre-trained to 8,192 tokens; Peewee set `max_len` to 512/1,024 at fine-tuning
   time. Run the held-out suites at `max_len` 1,024, 2,048 and 4,096 with no retraining and
   record the accuracy curve. If it degrades gracefully, raise the defaults for the
   multilingual and typed-decisions checkpoints immediately.
@@ -302,16 +302,16 @@ The original plan, kept for reference:
 - **Chunk-and-aggregate** fallback for genuinely long inputs: score each chunk, combine with
   a learned or fixed rule (max for risk questions, last-chunk-weighted for state questions).
 
-### Phase 4: per-workload classifiers — training CLI done (`laya train`, `laya eval`, `laya prepare-data`), and mixing datasets beats training on either alone (2026-09-22); teacher labelling and the gating harness are next
+### Phase 4: per-workload classifiers — training CLI done (`peewee train`, `peewee eval`, `peewee prepare-data`), and mixing datasets beats training on either alone (2026-09-22); teacher labelling and the gating harness are next
 - Mixing typed-decisions (upsampled 4x) with Open-Jev gave the best checkpoint on every split: 0.8005 on
   typed-decisions test against the published checkpoint's 0.7685, while matching the Open-Jev specialist on
   Open-Jev test and OOD. Calibration does not mix the same way — one temperature map fitted on a combined
   held-out set follows the larger dataset — so fit temperatures per workload (`--calib-data`, or
   `Agent.fit_temperatures` after training). `BENCHMARKS.md`, "Training on both datasets at once".
-- `laya/train.py`: the RLCD loop lifted out of the notebook into a CLI (`laya train
+- `peewee_decide/train.py`: the RLCD loop lifted out of the notebook into a CLI (`peewee train
   --data ... --base multilingual --epochs 4`), with the dataset schema documented (JSONL of
   `{state, questions, targets}`).
-- `laya/distill.py`: a teacher-labelling script that sends unlabelled states plus the question
+- `peewee_decide/distill.py`: a teacher-labelling script that sends unlabelled states plus the question
   schema to Claude and writes soft targets, with a held-out split for calibration and
   evaluation. This is how each workload gets its data.
 - Evaluation harness that reports accuracy, Brier, ECE and the confusion matrix per question,

@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 628" width="1200" height="628" role="img" aria-label="Peewee: my name is Jev!">
+  <title>Peewee — my name is Jev!</title>
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b5a57"/>
+      <stop offset="1" stop-color="#3a3937"/>
+    </linearGradient>
+    <linearGradient id="box" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c79a63"/>
+      <stop offset="1" stop-color="#a97c49"/>
+    </linearGradient>
+    <linearGradient id="shutter" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4a4946"/>
+      <stop offset="1" stop-color="#2f2e2c"/>
+    </linearGradient>
+    <clipPath id="frame"><rect x="0" y="0" width="1200" height="628" rx="0"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <!-- warehouse -->
+    <rect width="1200" height="628" fill="url(#wall)"/>
+    <rect x="620" y="0" width="580" height="628" fill="url(#shutter)"/>
+    <g fill="#00000022">
+      <rect x="640" y="0" width="14" height="628"/><rect x="700" y="0" width="14" height="628"/>
+      <rect x="760" y="0" width="14" height="628"/><rect x="820" y="0" width="14" height="628"/>
+      <rect x="880" y="0" width="14" height="628"/><rect x="940" y="0" width="14" height="628"/>
+      <rect x="1000" y="0" width="14" height="628"/><rect x="1060" y="0" width="14" height="628"/>
+      <rect x="1120" y="0" width="14" height="628"/><rect x="1180" y="0" width="14" height="628"/>
+    </g>
+    <!-- pipes -->
+    <g stroke="#6f6d68" stroke-width="16" fill="none" opacity="0.7">
+      <path d="M0 62 H1200"/><path d="M0 104 H1200"/>
+    </g>
+    <g fill="#7d7b76" opacity="0.7">
+      <rect x="470" y="46" width="22" height="76" rx="6"/><rect x="980" y="46" width="22" height="76" rx="6"/>
+    </g>
+
+    <!-- stacked boxes -->
+    <g>
+      <rect x="392" y="236" width="238" height="188" fill="url(#box)"/>
+      <rect x="392" y="236" width="238" height="188" fill="none" stroke="#8c6435" stroke-width="4"/>
+      <path d="M392 330 H630" stroke="#8c6435" stroke-width="4"/>
+      <rect x="430" y="262" width="118" height="52" fill="#e8dcc6" opacity="0.85"/>
+      <g fill="#8c6435" opacity="0.8">
+        <rect x="442" y="274" width="82" height="7"/><rect x="442" y="288" width="64" height="7"/>
+        <rect x="442" y="302" width="72" height="7"/>
+      </g>
+      <g transform="translate(560 346)">
+        <circle r="30" fill="#f3efe6"/><circle r="30" fill="none" stroke="#b03a2e" stroke-width="5"/>
+        <path d="M-21 21 L21 -21" stroke="#b03a2e" stroke-width="5"/>
+        <rect x="-13" y="-13" width="26" height="22" fill="none" stroke="#6b6b6b" stroke-width="4"/>
+      </g>
+      <rect x="360" y="424" width="300" height="204" fill="url(#box)"/>
+      <rect x="360" y="424" width="300" height="204" fill="none" stroke="#8c6435" stroke-width="4"/>
+      <path d="M360 500 H660" stroke="#8c6435" stroke-width="4"/>
+    </g>
+
+    <!-- LEFT character: the straight man -->
+    <g>
+      <path d="M150 628 C150 508 214 470 300 470 C386 470 450 508 450 628 Z" fill="#1d2430"/>
+      <path d="M300 470 L272 520 L300 560 L328 520 Z" fill="#11151d"/>
+      <rect x="276" y="418" width="48" height="70" rx="22" fill="#d9a884"/>
+      <ellipse cx="300" cy="352" rx="88" ry="104" fill="#e8b892"/>
+      <path d="M210 344 C204 236 396 236 390 344 C382 292 356 276 300 276 C244 276 218 292 210 344 Z" fill="#2b2118"/>
+      <path d="M212 300 q16 -74 88 -74 q72 0 88 74 q-18 -44 -54 -52 q-14 22 -44 26 q-34 4 -42 -16 q-26 14 -36 42 Z" fill="#3a2c1f"/>
+      <g fill="#2b2118">
+        <path d="M244 336 q28 -16 56 -4 q-28 -6 -56 4 Z"/>
+        <path d="M356 336 q-28 -16 -56 -4 q28 -6 56 4 Z"/>
+      </g>
+      <g fill="#ffffff">
+        <ellipse cx="268" cy="362" rx="19" ry="12"/><ellipse cx="332" cy="362" rx="19" ry="12"/>
+      </g>
+      <g fill="#3b2f26">
+        <circle cx="270" cy="362" r="8"/><circle cx="330" cy="362" r="8"/>
+      </g>
+      <path d="M300 372 L292 408 q8 6 16 0 Z" fill="#cf9b78"/>
+      <path d="M272 434 q28 10 56 0" stroke="#8e5f4a" stroke-width="7" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- RIGHT character: Peewee, head tilted back -->
+    <g transform="rotate(-13 900 500)">
+      <path d="M744 628 C744 512 812 474 900 474 C988 474 1056 512 1056 628 Z" fill="#3c4756"/>
+      <g stroke="#2c3542" stroke-width="7" opacity="0.9">
+        <path d="M764 520 H1036"/><path d="M760 566 H1040"/><path d="M810 480 V628"/><path d="M900 476 V628"/><path d="M990 480 V628"/>
+      </g>
+      <path d="M876 424 h48 v64 h-48 Z" fill="#cf9b78"/>
+      <ellipse cx="900" cy="352" rx="86" ry="100" fill="#e0ad86"/>
+      <!-- bandana -->
+      <path d="M816 318 q84 -74 168 0 q-6 -96 -84 -96 q-78 0 -84 96 Z" fill="#26364f"/>
+      <g fill="#ffffff" opacity="0.55">
+        <circle cx="850" cy="286" r="5"/><circle cx="884" cy="266" r="5"/><circle cx="918" cy="262" r="5"/>
+        <circle cx="952" cy="286" r="5"/><circle cx="868" cy="306" r="5"/><circle cx="936" cy="306" r="5"/>
+      </g>
+      <path d="M984 312 l44 -6 l-30 34 Z" fill="#26364f"/>
+      <!-- sunglasses -->
+      <g>
+        <path d="M818 344 h164 v10 h-164 Z" fill="#111317"/>
+        <path d="M824 348 q34 -8 62 0 q4 40 -30 44 q-34 4 -32 -44 Z" fill="#14161b"/>
+        <path d="M912 348 q34 -8 62 0 q4 44 -30 44 q-34 0 -32 -44 Z" fill="#14161b"/>
+        <path d="M832 356 q20 -4 34 2 l-30 12 Z" fill="#3d4450" opacity="0.8"/>
+        <path d="M920 356 q20 -4 34 2 l-30 12 Z" fill="#3d4450" opacity="0.8"/>
+      </g>
+      <!-- open mouth, chin up -->
+      <path d="M900 396 l-10 26 q10 6 20 0 Z" fill="#c78f6c"/>
+      <path d="M872 440 q28 26 56 0 q-28 -10 -56 0 Z" fill="#5d2f2c"/>
+      <path d="M876 442 q24 -6 48 0 q-24 6 -48 0 Z" fill="#ffffff" opacity="0.85"/>
+      <circle cx="946" cy="420" r="5" fill="#8e5f4a" opacity="0.7"/>
+    </g>
+
+    <!-- meme captions -->
+    <g font-family="Impact, Haettenschweiler, 'Arial Narrow Bold', 'Helvetica Neue', Arial, sans-serif" text-anchor="middle" fill="#ffffff" stroke="#000000" paint-order="stroke" stroke-linejoin="round">
+      <text x="600" y="92" font-size="70" stroke-width="8" letter-spacing="2">peewee-decide</text>
+      <text x="600" y="586" font-size="128" stroke-width="12" letter-spacing="2">MY NAME IS JEV!</text>
+    </g>
+  </g>
+</svg>

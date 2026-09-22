@@ -6,8 +6,8 @@ import os
 import numpy as np
 import pytest
 
-from laya.agent import Agent, _check_truncate, patch_tokenizer_config
-from laya.common import normalized_entropy
+from peewee_decide.agent import Agent, _check_truncate, patch_tokenizer_config
+from peewee_decide.common import normalized_entropy
 
 QUESTIONS = {
     "dept": {"type": "choice", "instructions": "Which team?", "criteria": {"billing": "money", "tech": "bugs"}},
@@ -137,7 +137,7 @@ def test_temperature_bucket_is_applied(fake_tok):
 def test_truncation_is_reported_and_warned_once(fake_tok, caplog):
     a = bare_agent(fake_tok)
     state = " ".join("w%d" % i for i in range(3000))
-    with caplog.at_level(logging.DEBUG, logger="laya"):
+    with caplog.at_level(logging.DEBUG, logger="peewee"):
         items = a._build_items(state, QUESTIONS)
         out = a._postprocess(QUESTIONS, items, LOGITS, ACT, 1)
         out2 = a._postprocess(QUESTIONS, items, LOGITS, ACT, 1)
@@ -161,7 +161,7 @@ def test_option_budget_is_reported(fake_tok, caplog):
     n = len(items)
     logits = np.full((n, 77), -1e4, dtype=np.float32)
     logits[:, :2] = 0
-    with caplog.at_level(logging.WARNING, logger="laya"):
+    with caplog.at_level(logging.WARNING, logger="peewee"):
         out = a._postprocess(qs, items, logits, np.zeros((n, 2), dtype=np.float32), 1)
     budget = out["usage"]["option_budget"]
     assert set(budget) == {"many", "long"}
@@ -248,7 +248,7 @@ def test_patch_tokenizer_config():
 
 
 def test_tokenizer_dir_never_writes_into_the_checkpoint(tmp_path):
-    from laya.agent import _tokenizer_dir
+    from peewee_decide.agent import _tokenizer_dir
     tok = tmp_path / "tokenizer"
     tok.mkdir()
     (tok / "tokenizer.json").write_text("{}")

@@ -1,8 +1,8 @@
-"""laya.data: JSONL schema, target vectors and reference answers. No weights, no network."""
+"""peewee_decide.data: JSONL schema, target vectors and reference answers. No weights, no network."""
 import json
 import pytest
 
-from laya.data import (convert_open_jev_rows, convert_typed_decisions_row, main as prepare_main, option_keys,
+from peewee_decide.data import (convert_open_jev_rows, convert_typed_decisions_row, main as prepare_main, option_keys,
                        read_jsonl, record_to_items, reference_index, split_cases, target_vector, validate_record,
                        write_jsonl)
 from tests.conftest import FakeTokenizer
@@ -112,7 +112,7 @@ def test_questions_whose_options_do_not_fit_are_skipped_and_named():
 
 
 def test_list_states_keep_their_end_by_default():
-    from laya.common import serialize_state
+    from peewee_decide.common import serialize_state
     state = ["opening " + "filler " * 60, "closing words here"]
     toks = TOK(serialize_state(state))["input_ids"]
     rec = _record(state=state)
@@ -168,7 +168,7 @@ def test_plain_text_states_are_kept_as_text():
 
 
 def test_prepare_data_writes_train_and_test(tmp_path, monkeypatch):
-    import laya.data as data
+    import peewee_decide.data as data
     monkeypatch.setattr(data, "convert_typed_decisions",
                         lambda split: [convert_typed_decisions_row(dict(_td_row(), id=split))])
     assert prepare_main(["typed-decisions", "--out", str(tmp_path)]) == 0
@@ -177,7 +177,7 @@ def test_prepare_data_writes_train_and_test(tmp_path, monkeypatch):
 
 
 def test_prepare_data_rejects_open_jev_options_for_typed_decisions(tmp_path, monkeypatch):
-    import laya.data as data
+    import peewee_decide.data as data
     monkeypatch.setattr(data, "convert_typed_decisions",
                         lambda split: [convert_typed_decisions_row(dict(_td_row(), id=split))])
     with pytest.raises(SystemExit) as e:
@@ -235,7 +235,7 @@ def test_split_keeps_a_group_together():
 
 
 def test_prepare_data_open_jev_writes_every_split(tmp_path, monkeypatch):
-    import laya.data as data
+    import peewee_decide.data as data
     calls = []
 
     def fake(config, split, revision):

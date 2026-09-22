@@ -36,7 +36,7 @@ sweeps. Steps can be skipped (`--skip calibrate,lengths`) or shrunk (`--per-loca
    only verified on a small BERT-style model before this.
 4. **Calibration**: temperatures fitted on MASSIVE validation across six locales, ECE and NLL
    on MASSIVE test before and after, per-locale accuracy. The resulting JSON is what
-   `laya.load(..., calibration=...)` and `LAYA_CALIBRATION` consume.
+   `peewee_decide.load(..., calibration=...)` and `PEEWEE_CALIBRATION` consume.
 5. **Phase 3, context length**: accuracy on IMDB reviews (many exceed 512 tokens) at
    `max_len` 512, 1024, 2048, 4096 with left and right truncation. If accuracy holds or improves
    past the trained length, the multilingual and typed-decisions defaults can be raised without
@@ -63,6 +63,6 @@ length) is what the service does today. About 15 minutes on one GPU.
 ## After the run
 
 - Commit `report.md` and the calibration files; open a PR against the mainline.
-- If ONNX parity is good, rebuild the Docker image with `LAYA_BACKEND=onnx` and run
+- If ONNX parity is good, rebuild the Docker image with `PEEWEE_BACKEND=onnx` and run
   `scripts/loadtest.py` against it for CPU throughput numbers.
 - Paste the length-sweep table into `REVIEW.md` Phase 3 so the next decision is made on data.

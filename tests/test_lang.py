@@ -1,7 +1,7 @@
 """Script and language detection. Pure Python, no weights."""
 import pytest
 
-from laya.lang import analyse, detect_script, guess_latin_language, is_english, state_text
+from peewee_decide.lang import analyse, detect_script, guess_latin_language, is_english, state_text
 
 
 @pytest.mark.parametrize("text, want", [
@@ -97,7 +97,7 @@ def test_short_english_stays_english(text):
 
 
 def test_external_detector_hook():
-    from laya.lang import register_language_detector
+    from peewee_decide.lang import register_language_detector
     calls = []
 
     def det(text):

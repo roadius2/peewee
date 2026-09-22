@@ -1,4 +1,4 @@
-"""Training and evaluation data for `laya train` and `laya eval`.
+"""Training and evaluation data for `peewee train` and `peewee eval`.
 
 One JSONL record per case::
 
@@ -10,7 +10,7 @@ One JSONL record per case::
 
 A target holds `probabilities` (keys: choice keys, score levels "0".."k-1", or "false"/"true"),
 a hard `label`, or both. `probabilities` is the training signal when present; `label` is the
-reference answer for accuracy when present. Option order is `laya.common.render_options` order.
+reference answer for accuracy when present. Option order is `peewee_decide.common.render_options` order.
 """
 import argparse
 import collections
@@ -237,7 +237,7 @@ def _load_dataset():
     try:
         from datasets import load_dataset
     except ImportError as e:
-        raise ImportError("`laya prepare-data` needs the datasets package: pip install 'laya[train]'") from e
+        raise ImportError("`peewee prepare-data` needs the datasets package: pip install 'peewee-decide[train]'") from e
     return load_dataset
 
 
@@ -252,7 +252,7 @@ OPEN_JEV_DEFAULT_CONFIG = "release-v2-redistributable"
 
 
 def open_jev_question(row: Dict[str, Any]) -> Dict[str, Any]:
-    """One Open-Jev row's question in laya's question format."""
+    """One Open-Jev row's question in Peewee's question format."""
     kind, options = row["kind"], [str(o) for o in row["options"]]
     if len(set(options)) != len(options):
         raise ValueError("%s: duplicate option strings %s" % (row["id"], options))
@@ -297,7 +297,7 @@ def _write_split(out_dir: str, split: str, records: List[Dict[str, Any]]) -> Non
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="laya prepare-data", description="Write a public dataset as laya training JSONL.")
+    ap = argparse.ArgumentParser(prog="peewee prepare-data", description="Write a public dataset as Peewee training JSONL.")
     ap.add_argument("dataset", choices=["typed-decisions", "open-jev"])
     ap.add_argument("--out", required=True, help="output directory")
     ap.add_argument("--config", default=None, help="open-jev only: dataset config")

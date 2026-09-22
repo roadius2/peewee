@@ -1,4 +1,4 @@
-"""Core model architecture, token sequence construction, and confidence estimation for laya."""
+"""Core model architecture, token sequence construction, and confidence estimation for Peewee."""
 import json
 import math
 import os

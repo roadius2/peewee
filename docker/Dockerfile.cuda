@@ -1,6 +1,6 @@
-# CUDA image for the Laya decision service.
-#   docker build -f docker/Dockerfile.cuda -t laya:cuda .
-#   docker run --gpus all -p 8000:8000 -e LAYA_DEVICE=cuda -v laya-hub:/root/.cache/huggingface laya:cuda
+# CUDA image for the Peewee decision service.
+#   docker build -f docker/Dockerfile.cuda -t peewee:cuda .
+#   docker run --gpus all -p 8000:8000 -e PEEWEE_DEVICE=cuda -v peewee-hub:/root/.cache/huggingface peewee:cuda
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 USE_TF=0 USE_TORCH=1 TOKENIZERS_PARALLELISM=false \
     HF_HOME=/root/.cache/huggingface DEBIAN_FRONTEND=noninteractive
@@ -10,8 +10,8 @@ WORKDIR /app
 RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu124
 COPY pyproject.toml README.md LICENSE NOTICE ./
-COPY laya ./laya
+COPY peewee_decide ./peewee_decide
 RUN pip install --no-cache-dir ".[server]"
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=180s CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3).status==200 else 1)"
-CMD ["laya", "serve", "--host", "0.0.0.0", "--port", "8000", "--device", "cuda"]
+CMD ["peewee", "serve", "--host", "0.0.0.0", "--port", "8000", "--device", "cuda"]

@@ -1,4 +1,4 @@
-"""Load-test the Laya decision service: concurrency, p50/p95/p99 and throughput.
+"""Load-test the Peewee decision service: concurrency, p50/p95/p99 and throughput.
 
     python scripts/loadtest.py http://localhost:8000 --concurrency 64 --requests 2000
 

@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from laya.common import render_criterion, render_options
+from peewee_decide.common import render_criterion, render_options
 
 
 @pytest.mark.parametrize("value, want", [

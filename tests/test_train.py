@@ -1,10 +1,10 @@
-"""laya.train: the RLCD objective and the trainer, on a tiny random model. No weights, no network."""
+"""peewee_decide.train: the RLCD objective and the trainer, on a tiny random model. No weights, no network."""
 import pytest
 
 torch = pytest.importorskip("torch")
 
-from laya.common import QTYPES, proper_reward  # noqa: E402
-from laya.train import TrainConfig, main as train_main, pick_device, rlcd_loss, sigma_for_epoch, train  # noqa: E402
+from peewee_decide.common import QTYPES, proper_reward  # noqa: E402
+from peewee_decide.train import TrainConfig, main as train_main, pick_device, rlcd_loss, sigma_for_epoch, train  # noqa: E402
 from tests.conftest import toy_records  # noqa: E402
 
 
@@ -88,7 +88,7 @@ def _read(path):
 def test_train_writes_a_checkpoint_the_runtime_loads(tiny_base, tmp_path):
     from safetensors import safe_open
 
-    from laya.agent import Agent
+    from peewee_decide.agent import Agent
     out = tmp_path / "run"
     meta = train(tiny_base, toy_records(), str(out), TrainConfig(**FAST), device="cpu")
     for name in ("model.safetensors", "rl_agent_config.json", "encoder/config.json", "tokenizer/tokenizer.json",
@@ -164,7 +164,7 @@ def test_invalid_records_fail_before_any_work(tiny_base, tmp_path):
 
 
 def test_non_finite_loss_aborts_without_saving(tiny_base, tmp_path, monkeypatch):
-    import laya.train as lt
+    import peewee_decide.train as lt
 
     def nan_loss(*args, **kwargs):
         return torch.tensor(float("nan"), requires_grad=True), {"reward": 0.0, "ce": 0.0, "rl": 0.0}
@@ -182,7 +182,7 @@ def test_cuda_without_cuda_is_an_error():
 
 
 def test_train_cli(tiny_base, tmp_path):
-    from laya.data import write_jsonl
+    from peewee_decide.data import write_jsonl
     data = str(tmp_path / "train.jsonl")
     write_jsonl(data, toy_records())
     out = str(tmp_path / "run")
@@ -196,7 +196,7 @@ def test_train_cli(tiny_base, tmp_path):
 
 
 def test_train_cli_rejects_an_unknown_precision(tiny_base, tmp_path):
-    from laya.data import write_jsonl
+    from peewee_decide.data import write_jsonl
     data = str(tmp_path / "train.jsonl")
     write_jsonl(data, toy_records())
     with pytest.raises(SystemExit) as e:
@@ -209,7 +209,7 @@ def test_git_commit_is_read_without_a_subprocess():
     import os
     import subprocess
 
-    from laya.train import _git_commit
+    from peewee_decide.train import _git_commit
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if not os.path.exists(os.path.join(root, ".git")):
         pytest.skip("not a git checkout")
@@ -218,7 +218,7 @@ def test_git_commit_is_read_without_a_subprocess():
 
 
 def _capture_calibration_targets(monkeypatch):
-    import laya.calibrate as lc
+    import peewee_decide.calibrate as lc
     seen = []
     real = lc.fit_temperature_map
 
@@ -269,7 +269,7 @@ def test_calib_records_that_overlap_training_are_rejected(tiny_base, tmp_path):
 
 
 def test_repeat_upsamples_training_cases_only(tiny_base, tmp_path):
-    from laya.data import split_cases
+    from peewee_decide.data import split_cases
     recs = toy_records()
     repeat = {r["id"]: 3 for r in recs[:8]}
     meta = train(tiny_base, recs, str(tmp_path / "run"), TrainConfig(**dict(FAST, epochs=1)), device="cpu",
@@ -281,7 +281,7 @@ def test_repeat_upsamples_training_cases_only(tiny_base, tmp_path):
 
 
 def test_train_cli_mixes_files_and_takes_a_calibration_file(tiny_base, tmp_path):
-    from laya.data import write_jsonl
+    from peewee_decide.data import write_jsonl
     a, b, c = (str(tmp_path / n) for n in ("a.jsonl", "b.jsonl", "c.jsonl"))
     recs = toy_records()
     calib = toy_records(4, seed=2)
@@ -303,7 +303,7 @@ def test_train_cli_mixes_files_and_takes_a_calibration_file(tiny_base, tmp_path)
 
 @pytest.mark.parametrize("argv", [["--calibration-target", "soft"], ["--data", "x.jsonl:0"]])
 def test_train_cli_rejects_bad_mix_arguments(tiny_base, tmp_path, argv):
-    from laya.data import write_jsonl
+    from peewee_decide.data import write_jsonl
     data = str(tmp_path / "train.jsonl")
     write_jsonl(data, toy_records())
     with pytest.raises(SystemExit) as e:

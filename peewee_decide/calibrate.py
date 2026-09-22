@@ -1,19 +1,19 @@
-"""Fit, evaluate and persist temperature calibration for Laya checkpoints.
+"""Fit, evaluate and persist temperature calibration for Peewee checkpoints.
 
-The shipped checkpoints are over-confident (README: mean ECE 0.466 for `laya` before fitting)
+The shipped checkpoints are over-confident (README: mean ECE 0.466 for `peewee_decide` before fitting)
 and the multilingual checkpoint ships with no temperatures at all. This module is the missing
 writer for the runtime's `temperature` / `temperature_by_options` lookup:
 
-    import laya
-    from laya.calibrate import collect_records, fit_temperature_map
+    import peewee_decide
+    from peewee_decide.calibrate import collect_records, fit_temperature_map
 
-    agent = laya.load("convaiinnovations/laya")
+    agent = peewee_decide.load("convaiinnovations/laya")
     examples = [(state, questions, {"dept": "billing", "urgent": True, "level": 2}), ...]
     records = collect_records(agent, examples)          # one forward pass per batch
     result = agent.fit_temperatures(records)            # stores the map on the agent
     print(result["report"])                              # ECE / NLL / Brier before and after
     agent.save_calibration("calibration.json")
-    laya.load("convaiinnovations/laya", calibration="calibration.json")
+    peewee_decide.load("convaiinnovations/laya", calibration="calibration.json")
 
 Design follows the fitting loop in the upstream fine-tuning notebook and upstream PR #19 by
 Matt Van Horn (mvanhorn): one temperature per question type, plus one per

@@ -1,11 +1,11 @@
-"""`python -m laya <command> ...` and `laya <command> ...`."""
+"""`python -m peewee_decide <command> ...` and `peewee <command> ...`."""
 import sys
 
-USAGE = """usage: laya serve [--host H] [--port P] [--models a,b] [--device D]
-       laya export-onnx <checkpoint> <out_dir> [--quantize]
-       laya prepare-data typed-decisions|open-jev --out DIR [--config NAME]
-       laya train --data FILE --base NAME|DIR --out DIR [options; see laya train --help]
-       laya eval NAME|DIR --data FILE [--device D] [--out report.json]"""
+USAGE = """usage: peewee serve [--host H] [--port P] [--models a,b] [--device D]
+       peewee export-onnx <checkpoint> <out_dir> [--quantize]
+       peewee prepare-data typed-decisions|open-jev --out DIR [--config NAME]
+       peewee train --data FILE --base NAME|DIR --out DIR [options; see peewee train --help]
+       peewee eval NAME|DIR --data FILE [--device D] [--out report.json]"""
 
 
 def main(argv=None):

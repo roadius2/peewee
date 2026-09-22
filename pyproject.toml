@@ -3,16 +3,16 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "laya"
+name = "peewee-decide"
 dynamic = ["version"]
-description = "Fast, non-autoregressive System 1 decision engine with calibrated probabilities"
+description = "Peewee: a small, fast reflex model that answers typed questions about a state in one forward pass"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "Convai Innovations" }
+    { name = "roadius2" }
 ]
-keywords = ["decision-model", "rlcd", "calibration", "system-one", "routing", "guardrails", "moderation", "triage"]
+keywords = ["decision-model", "rlcd", "calibration", "system-one", "routing", "guardrails", "agents", "tool-routing"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -60,17 +60,18 @@ dev = [
 ]
 
 [project.scripts]
-laya = "laya.__main__:main"
+peewee = "peewee_decide.__main__:main"
 
 [project.urls]
-Homepage = "https://huggingface.co/convaiinnovations/laya"
-Demo = "https://huggingface.co/spaces/convaiinnovations/laya-demo"
+Homepage = "https://github.com/roadius2/peewee"
+Source = "https://github.com/roadius2/peewee"
+Changelog = "https://github.com/roadius2/peewee/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
-packages = ["laya"]
+packages = ["peewee_decide"]
 
 [tool.setuptools.dynamic]
-version = { attr = "laya.__version__" }
+version = { attr = "peewee_decide.__version__" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

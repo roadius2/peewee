@@ -1,7 +1,7 @@
-"""Laya as a service: dynamic batching, HTTP API, health and metrics.
+"""Peewee as a service: dynamic batching, HTTP API, health and metrics.
 
-    laya serve                       # or: python -m laya.serving
-    uvicorn laya.serving:create_app --factory
+    peewee serve                       # or: python -m peewee_decide.serving
+    uvicorn peewee_decide.serving:create_app --factory
 
 One process holds a preloaded `Router`. Every incoming request is routed (pure Python,
 microseconds) to a checkpoint name and queued on that checkpoint's `DynamicBatcher`. A batcher
@@ -12,19 +12,19 @@ of queueing behind each other.
 
 Environment
 -----------
-LAYA_MODELS        comma-separated checkpoints to preload (default: english,multilingual)
-LAYA_DEVICE        cuda | cpu | mps (default: auto)
-LAYA_HF_TOKEN      Hugging Face token for private repos
-LAYA_CALIBRATION   path to a calibration JSON applied to every loaded checkpoint, or
+PEEWEE_MODELS        comma-separated checkpoints to preload (default: english,multilingual)
+PEEWEE_DEVICE        cuda | cpu | mps (default: auto)
+PEEWEE_HF_TOKEN      Hugging Face token for private repos
+PEEWEE_CALIBRATION   path to a calibration JSON applied to every loaded checkpoint, or
                    name=path,name=path for per-checkpoint files
-LAYA_TRUNCATE      default truncation side: left | right (default: agent default)
-LAYA_MAX_BATCH     questions per forward pass (default 32)
-LAYA_MAX_WAIT_MS   how long a batch waits for company before it runs (default 5)
-LAYA_WORKERS       inference threads; keep 1 per GPU (default 1)
-LAYA_API_KEY       optional bearer token required on /v1/* endpoints
-LAYA_MAX_STATE_CHARS   reject states longer than this many characters (default 200000)
-LAYA_BACKEND       torch (default) | onnx (see laya.onnx_backend; LAYA_MODELS then names
-                   exported directories: name=path,name=path). With onnx, LAYA_DEVICE=cuda
+PEEWEE_TRUNCATE      default truncation side: left | right (default: agent default)
+PEEWEE_MAX_BATCH     questions per forward pass (default 32)
+PEEWEE_MAX_WAIT_MS   how long a batch waits for company before it runs (default 5)
+PEEWEE_WORKERS       inference threads; keep 1 per GPU (default 1)
+PEEWEE_API_KEY       optional bearer token required on /v1/* endpoints
+PEEWEE_MAX_STATE_CHARS   reject states longer than this many characters (default 200000)
+PEEWEE_BACKEND       torch (default) | onnx (see peewee_decide.onnx_backend; PEEWEE_MODELS then names
+                   exported directories: name=path,name=path). With onnx, PEEWEE_DEVICE=cuda
                    requires the CUDA provider and fails at startup without it; unset, the
                    backend picks CUDA when available and warns if it has to run on CPU.
 
@@ -45,7 +45,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-logger = logging.getLogger("laya.serving")
+logger = logging.getLogger("peewee_decide.serving")
 
 
 # ------------------------------------------------------------------------------ settings
@@ -69,24 +69,24 @@ class Settings:
     def from_env(cls, env: Optional[Dict[str, str]] = None) -> "Settings":
         e = os.environ if env is None else env
         s = cls()
-        if e.get("LAYA_MODELS"):
-            s.models = [m.strip() for m in e["LAYA_MODELS"].split(",") if m.strip()]
-        s.device = e.get("LAYA_DEVICE") or None
-        s.hf_token = e.get("LAYA_HF_TOKEN") or e.get("HF_TOKEN") or None
-        s.calibration = e.get("LAYA_CALIBRATION") or None
-        s.truncate = e.get("LAYA_TRUNCATE") or None
-        s.max_batch = int(e.get("LAYA_MAX_BATCH", s.max_batch))
-        s.max_wait_ms = float(e.get("LAYA_MAX_WAIT_MS", s.max_wait_ms))
-        s.workers = int(e.get("LAYA_WORKERS", s.workers))
-        s.api_key = e.get("LAYA_API_KEY") or None
-        s.max_state_chars = int(e.get("LAYA_MAX_STATE_CHARS", s.max_state_chars))
-        s.backend = (e.get("LAYA_BACKEND") or s.backend).lower()
-        s.host = e.get("LAYA_HOST", s.host)
-        s.port = int(e.get("LAYA_PORT", s.port))
+        if e.get("PEEWEE_MODELS"):
+            s.models = [m.strip() for m in e["PEEWEE_MODELS"].split(",") if m.strip()]
+        s.device = e.get("PEEWEE_DEVICE") or None
+        s.hf_token = e.get("PEEWEE_HF_TOKEN") or e.get("HF_TOKEN") or None
+        s.calibration = e.get("PEEWEE_CALIBRATION") or None
+        s.truncate = e.get("PEEWEE_TRUNCATE") or None
+        s.max_batch = int(e.get("PEEWEE_MAX_BATCH", s.max_batch))
+        s.max_wait_ms = float(e.get("PEEWEE_MAX_WAIT_MS", s.max_wait_ms))
+        s.workers = int(e.get("PEEWEE_WORKERS", s.workers))
+        s.api_key = e.get("PEEWEE_API_KEY") or None
+        s.max_state_chars = int(e.get("PEEWEE_MAX_STATE_CHARS", s.max_state_chars))
+        s.backend = (e.get("PEEWEE_BACKEND") or s.backend).lower()
+        s.host = e.get("PEEWEE_HOST", s.host)
+        s.port = int(e.get("PEEWEE_PORT", s.port))
         return s
 
     def calibration_for(self, name: str) -> Optional[str]:
-        """Resolve LAYA_CALIBRATION for one checkpoint: a single path, or name=path pairs."""
+        """Resolve PEEWEE_CALIBRATION for one checkpoint: a single path, or name=path pairs."""
         if not self.calibration:
             return None
         if "=" not in self.calibration:
@@ -111,17 +111,17 @@ def _prometheus_collectors() -> Optional[Dict[str, Any]]:
     except ImportError:      # metrics are optional; the service works without them
         return None
     _PROM.update(
-        requests=Counter("laya_requests_total", "Decision requests", ["model", "status"]),
-        questions=Counter("laya_questions_total", "Questions answered", ["model", "type"]),
-        truncated=Counter("laya_truncated_total", "Requests whose state was truncated", ["model"]),
-        latency=Histogram("laya_request_seconds", "Wall time per request", ["model"],
+        requests=Counter("peewee_requests_total", "Decision requests", ["model", "status"]),
+        questions=Counter("peewee_questions_total", "Questions answered", ["model", "type"]),
+        truncated=Counter("peewee_truncated_total", "Requests whose state was truncated", ["model"]),
+        latency=Histogram("peewee_request_seconds", "Wall time per request", ["model"],
                           buckets=(.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5)),
-        batch_size=Histogram("laya_batch_questions", "Questions per forward pass", ["model"],
+        batch_size=Histogram("peewee_batch_questions", "Questions per forward pass", ["model"],
                              buckets=(1, 2, 4, 8, 16, 32, 64, 128)),
-        forward=Histogram("laya_forward_seconds", "Wall time per forward pass", ["model"],
+        forward=Histogram("peewee_forward_seconds", "Wall time per forward pass", ["model"],
                           buckets=(.01, .025, .05, .1, .25, .5, 1, 2.5)),
-        queue_depth=Gauge("laya_queue_depth", "Requests waiting for a batch", ["model"]),
-        confidence=Histogram("laya_confidence", "Reported confidence", ["model", "type"],
+        queue_depth=Gauge("peewee_queue_depth", "Requests waiting for a batch", ["model"]),
+        confidence=Histogram("peewee_confidence", "Reported confidence", ["model", "type"],
                              buckets=(.5, .6, .7, .8, .9, .95, .99, 1.0)),
     )
     return _PROM
@@ -258,7 +258,7 @@ class DynamicBatcher:
                 results = await loop.run_in_executor(
                     self.executor, lambda: self.agent.predict_many(reqs, truncate=side, max_batch=self.max_batch))
             except Exception as e:      # one bad request must not strand the others silently
-                logger.exception("laya.serving: forward pass failed for %d request(s) on %r", len(entries), self.name)
+                logger.exception("peewee_decide.serving: forward pass failed for %d request(s) on %r", len(entries), self.name)
                 for _, _, _, fut in entries:
                     if not fut.done():
                         fut.set_exception(e)
@@ -289,7 +289,7 @@ class DecisionService:
         self.router = router
         self.settings = settings or Settings()
         self.metrics = metrics or Metrics()
-        self.executor = ThreadPoolExecutor(max_workers=max(1, self.settings.workers), thread_name_prefix="laya-infer")
+        self.executor = ThreadPoolExecutor(max_workers=max(1, self.settings.workers), thread_name_prefix="peewee-infer")
         self._batchers: Dict[str, DynamicBatcher] = {}
         self._block = threading.Lock()
         self.started_at = time.time()
@@ -317,7 +317,7 @@ class DecisionService:
                 raise ValueError("question %r needs 'criteria'" % qid)
         from .lang import state_text
         if len(state_text(state, max_chars=self.settings.max_state_chars + 1)) > self.settings.max_state_chars:
-            raise ValueError("state exceeds LAYA_MAX_STATE_CHARS=%d" % self.settings.max_state_chars)
+            raise ValueError("state exceeds PEEWEE_MAX_STATE_CHARS=%d" % self.settings.max_state_chars)
 
     async def decide(self, state: Any, questions: Dict[str, Any], model: Optional[str] = None,
                      lang: Optional[str] = None, truncate: Optional[str] = None) -> Dict[str, Any]:
@@ -371,7 +371,7 @@ def build_router(settings: Settings):
         for spec in settings.models:
             name, _, path = spec.partition("=")
             if not path:
-                raise ValueError("LAYA_BACKEND=onnx needs LAYA_MODELS as name=exported_dir[,name=dir]")
+                raise ValueError("PEEWEE_BACKEND=onnx needs PEEWEE_MODELS as name=exported_dir[,name=dir]")
             key = normalise_name(name)
             router.attach(key, OnnxAgent(path, calibration=settings.calibration_for(key), truncate=settings.truncate,
                                          providers=providers))
@@ -404,13 +404,13 @@ def create_app(router: Any = None, settings: Optional[Settings] = None):
     async def lifespan(app):
         r = router if router is not None else build_router(settings)
         holder["service"] = DecisionService(r, settings, metrics)
-        logger.info("laya.serving: ready with %s", holder["service"].health()["loaded"])
+        logger.info("peewee_decide.serving: ready with %s", holder["service"].health()["loaded"])
         try:
             yield
         finally:
             await holder["service"].shutdown()
 
-    app = FastAPI(title="Laya decision service", version=_version(), lifespan=lifespan)
+    app = FastAPI(title="Peewee decision service", version=_version(), lifespan=lifespan)
     bearer = HTTPBearer(auto_error=False)
 
     async def auth(creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer)):
@@ -462,7 +462,7 @@ def create_app(router: Any = None, settings: Optional[Settings] = None):
             if isinstance(r, ValueError):
                 out.append({"error": str(r), "status": 422})
             elif isinstance(r, Exception):
-                logger.error("laya.serving: batch item failed: %r", r)
+                logger.error("peewee_decide.serving: batch item failed: %r", r)
                 out.append({"error": "inference failed", "status": 500})
             else:
                 out.append(r)
@@ -480,31 +480,31 @@ def _version() -> str:
 
 
 def main(argv: Optional[List[str]] = None):
-    """`laya serve` / `python -m laya.serving`."""
+    """`peewee serve` / `python -m peewee_decide.serving`."""
     import argparse
 
     import uvicorn
 
-    p = argparse.ArgumentParser(prog="laya serve", description="Run the Laya decision service")
+    p = argparse.ArgumentParser(prog="peewee serve", description="Run the Peewee decision service")
     p.add_argument("--host")
     p.add_argument("--port", type=int)
-    p.add_argument("--models", help="comma-separated checkpoints (overrides LAYA_MODELS)")
+    p.add_argument("--models", help="comma-separated checkpoints (overrides PEEWEE_MODELS)")
     p.add_argument("--device")
-    p.add_argument("--log-level", default=os.environ.get("LAYA_LOG_LEVEL", "info"))
+    p.add_argument("--log-level", default=os.environ.get("PEEWEE_LOG_LEVEL", "info"))
     args = p.parse_args(argv)
     env = dict(os.environ)
     if args.models:
-        env["LAYA_MODELS"] = args.models
+        env["PEEWEE_MODELS"] = args.models
     if args.device:
-        env["LAYA_DEVICE"] = args.device
+        env["PEEWEE_DEVICE"] = args.device
     if args.host:
-        env["LAYA_HOST"] = args.host
+        env["PEEWEE_HOST"] = args.host
     if args.port:
-        env["LAYA_PORT"] = str(args.port)
-    os.environ.update({k: v for k, v in env.items() if k.startswith("LAYA_")})
+        env["PEEWEE_PORT"] = str(args.port)
+    os.environ.update({k: v for k, v in env.items() if k.startswith("PEEWEE_")})
     settings = Settings.from_env(env)
     logging.basicConfig(level=args.log_level.upper(), format="%(asctime)s %(name)s %(levelname)s %(message)s")
-    uvicorn.run("laya.serving:create_app", factory=True, host=settings.host, port=settings.port,
+    uvicorn.run("peewee_decide.serving:create_app", factory=True, host=settings.host, port=settings.port,
                 log_level=args.log_level, workers=1)
 
 

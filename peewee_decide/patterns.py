@@ -99,7 +99,7 @@ def speculative_choice(
     The pattern from browser-use's jev-ultrafast agent: ask "which operation?" and, at the
     same time, "which target, if the operation is CLICK?", "which field, if it is TYPE_TEXT?",
     and so on. Only the follow-up matching the chosen operation is used; the others cost
-    nothing extra because Laya answers every question of a call in the same pass.
+    nothing extra because Peewee answers every question of a call in the same pass.
 
     `primary` is a `choice` question definition. `dependents` maps a primary option to the
     question to ask if that option wins (options with no dependent are allowed). The result

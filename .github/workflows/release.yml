@@ -4,7 +4,7 @@ name: Release
 # publishes to PyPI and opens a GitHub Release.
 #
 # Set up once: PyPI -> Publishing -> add a Trusted Publisher for
-#   owner NandhaKishorM, repo laya, workflow release.yml, environment pypi
+#   owner roadius2, repo peewee, workflow release.yml, environment pypi
 # Then no API token ever lives in GitHub secrets.
 
 on:
@@ -44,10 +44,10 @@ jobs:
       - name: Version matches the tag
         if: startsWith(github.ref, 'refs/tags/v')   # workflow_dispatch has no tag to match
         run: |
-          pkg=$(python -c "import re;print(re.search(r'__version__ = \"(.*)\"', open('laya/__init__.py').read()).group(1))")
+          pkg=$(python -c "import re;print(re.search(r'__version__ = \"(.*)\"', open('peewee_decide/__init__.py').read()).group(1))")
           tag="${GITHUB_REF_NAME#v}"
           echo "version=$pkg tag=$tag"
-          test "$pkg" = "$tag" || { echo "::error::laya.__version__ $pkg does not match tag $tag"; exit 1; }
+          test "$pkg" = "$tag" || { echo "::error::peewee_decide.__version__ $pkg does not match tag $tag"; exit 1; }
 
       - run: python -m twine check dist/*
 
@@ -69,7 +69,7 @@ jobs:
           name: dist
           path: dist/
       # Needs a Trusted Publisher on PyPI (Publishing -> add: owner NandhaKishorM,
-      # repo laya, workflow release.yml, environment pypi). Until that exists the
+      # repo peewee, workflow release.yml, environment pypi). Until that exists the
       # exchange fails; skip-existing also makes a re-run safe after a manual upload.
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:

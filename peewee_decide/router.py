@@ -1,4 +1,4 @@
-"""Route a request to the Laya checkpoint best suited to it.
+"""Route a request to the Peewee checkpoint best suited to it.
 
 Three checkpoints, measured on a shared benchmark (17,416 questions, one T4, identical questions
 per model -- see the repository's benchmark notebook):
@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from .lang import analyse
 
-logger = logging.getLogger("laya.router")
+logger = logging.getLogger("peewee_decide.router")
 
 # The hub repo bundles all three checkpoints; only the requested subfolder is downloaded.
 BUNDLE_REPO = "convaiinnovations/laya"
@@ -124,9 +124,9 @@ def match_typed_decisions_workflow(questions: Dict[str, Any]) -> Optional[str]:
 
 
 class Router:
-    """Lazily loads Laya checkpoints and sends each request to the right one.
+    """Lazily loads Peewee checkpoints and sends each request to the right one.
 
-        from laya import Router
+        from peewee_decide import Router
 
         r = Router()
         r.predict({"message": "Mein Konto wurde zweimal belastet"}, questions)   # -> multilingual
@@ -193,7 +193,7 @@ class Router:
             evicted = self._evict()
             if evicted:
                 logger.warning(
-                    "laya.Router: loading %r evicted %s (max_loaded=%d). If this happens per "
+                    "peewee.Router: loading %r evicted %s (max_loaded=%d). If this happens per "
                     "request, raise max_loaded or use Router(preload=True).",
                     key, evicted, self.max_loaded)
             return agent

@@ -1,7 +1,7 @@
-"""The `laya` command dispatches every subcommand."""
+"""The `peewee_decide` command dispatches every subcommand."""
 import pytest
 
-from laya.__main__ import main
+from peewee_decide.__main__ import main
 
 
 @pytest.mark.parametrize("cmd", ["train", "eval", "prepare-data"])
@@ -13,4 +13,4 @@ def test_subcommands_are_dispatched(cmd):
 
 def test_unknown_command_prints_usage(capsys):
     assert main(["nope"]) == 2
-    assert "laya train" in capsys.readouterr().err
+    assert "peewee train" in capsys.readouterr().err

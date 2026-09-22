@@ -1,4 +1,4 @@
-# Laya benchmarks
+# Peewee benchmarks
 
 Every checkpoint answered **byte-identical questions** in each run (fixed seed). Jev figures are **third-party published, never measured here** — no TypeSafe API access — so sample sizes and prompts differ; treat them as indicative.
 
@@ -12,7 +12,7 @@ Every checkpoint answered **byte-identical questions** in each run (fixed seed).
 
 ## Headline
 
-| | Laya | Jev (published) |
+| | Peewee | Jev (published) |
 |---|---|---|
 | typed-decisions (2,000 decisions) | **0.766** | 0.727 |
 | AG News (4 labels) | **0.953** | 0.910 |
@@ -107,7 +107,7 @@ The English checkpoint does not degrade gracefully outside English — it collap
 
 ## Themes — the application workflows
 
-Each is real labelled data, 400 cases, all three checkpoints. *held out* means the source was **not** in Laya's training mix.
+Each is real labelled data, 400 cases, all three checkpoints. *held out* means the source was **not** in Peewee's training mix.
 
 | theme | laya | laya-multilingual | laya-typed-decisions | data |
 |---|---|---|---|---|
@@ -167,15 +167,15 @@ banking77 is the one clear loss, and it is architectural: a choice question's op
 | 10 | 158.6 ms | **72.3 ms** |
 | 50 | 771.3 ms | **337.4 ms** |
 
-103–332 questions/sec batched. Jev independently measured at 236-276 ms p50, so Laya answers one question roughly **6–7× faster**.
+103–332 questions/sec batched. Jev independently measured at 236-276 ms p50, so Peewee answers one question roughly **6–7× faster**.
 
 ## Decision service throughput (fork, 2026-09-20)
 
-`laya serve` with `english` and `multilingual` resident, driven by `scripts/loadtest.py`: each
+`peewee serve` with `english` and `multilingual` resident, driven by `scripts/loadtest.py`: each
 request is one state and three questions (choice, score, noul), five states rotating so both
 checkpoints see traffic. Questions/s counts every question answered; p50 is per request.
 Measured on one host (AMD Ryzen 9 9950X3D, RTX 5090); the CPU runs are the `docker/Dockerfile`
-image limited to 8 cores with `LAYA_BACKEND=onnx` and the fp32 export, or the torch CPU path.
+image limited to 8 cores with `PEEWEE_BACKEND=onnx` and the fp32 export, or the torch CPU path.
 
 | backend | clients | questions/s | requests/s | p50 ms | p99 ms |
 |---|---|---|---|---|---|
@@ -196,17 +196,17 @@ this CPU; its value is the 60% smaller file. Rule of thumb: one 8-core CPU box s
 40 questions/s at sub-second latency; one RTX 5090 serves about 1,400 questions/s, roughly
 35x, with the p99 under 100 ms up to 32 concurrent clients.
 
-## Reproducing typed-decisions with `laya train` (fork, 2026-09-21)
+## Reproducing typed-decisions with `peewee train` (fork, 2026-09-21)
 
-`laya train --base english --max-len 1024 --head-max-len 256` on `LocalLLaMA/typed-decisions`
+`peewee train --base english --max-len 1024 --head-max-len 256` on `LocalLLaMA/typed-decisions`
 train (1,200 cases, 120 held out for calibration), one RTX 5090, bf16, defaults otherwise
-(4 epochs, effective batch 64). Both checkpoints scored by `laya eval` on the 2,000-decision test
+(4 epochs, effective batch 64). Both checkpoints scored by `peewee eval` on the 2,000-decision test
 split, accuracy against the dataset's hard labels as in the original notebook.
 
 | checkpoint | accuracy | soft acc | Brier | ECE | choice | score | noul |
 |---|---|---|---|---|---|---|---|
 | published `typed-decisions` | 0.7685 | 0.4707 | 0.0615 | 0.2157 | 0.7367 | 0.7262 | 0.8567 |
-| `laya train` (td-v1) | 0.7560 | 0.5113 | 0.0534 | 0.1357 | 0.7350 | 0.7075 | 0.8417 |
+| `peewee train` (td-v1) | 0.7560 | 0.5113 | 0.0534 | 0.1357 | 0.7350 | 0.7075 | 0.8417 |
 
 Training took 298.6 seconds (about 5.0 minutes). Held-out ECE before and after temperature fitting:
 0.1697 -> 0.1844. Temperatures are fitted to each question's teacher distribution (negative
@@ -227,13 +227,13 @@ notebook reported. The new eval code agrees with the notebook's scoring to withi
 
 ## Training on Open-Jev (fork, 2026-09-21)
 
-`laya train --base english --max-len 1024 --head-max-len 256` on Open-Jev's
+`peewee train --base english --max-len 1024 --head-max-len 256` on Open-Jev's
 `release-v2-redistributable` train split (CC0, pinned revision
-`c67699e13d0ae25e35b77165a4b6b079bedc8aba`), converted with `laya prepare-data open-jev`, one
+`c67699e13d0ae25e35b77165a4b6b079bedc8aba`), converted with `peewee prepare-data open-jev`, one
 RTX 5090, bf16, defaults otherwise (oj-v1). Training used 13,048 cases (69,473 items) and held
 out 1,493 cases (9,643 items) for calibration; 0 questions were skipped. Training took 4,785.6
 seconds, about 79.8 minutes. Both oj-v1 and the earlier td-v1 (trained on typed-decisions, see
-above) were then evaluated with `laya eval` on Open-Jev test, Open-Jev OOD and typed-decisions
+above) were then evaluated with `peewee eval` on Open-Jev test, Open-Jev OOD and typed-decisions
 test.
 
 | checkpoint | Open-Jev test acc | Open-Jev test ECE | Open-Jev OOD acc | Open-Jev OOD ECE | typed-decisions test acc | typed-decisions test ECE |
@@ -313,7 +313,7 @@ Each single-dataset checkpoint is strong only on its own data (td-v1 scores 0.54
 test, oj-v1 scores 0.4215 on typed-decisions test), so mix-v1 trains on both:
 
 ```bash
-laya train --data data/typed-decisions/train.jsonl:4 --data data/open-jev/train.jsonl \
+peewee train --data data/typed-decisions/train.jsonl:4 --data data/open-jev/train.jsonl \
            --calibration-target label --base english --out runs/mix-v1 --max-len 1024 --head-max-len 256
 ```
 
@@ -349,8 +349,8 @@ scored against, and held-out ECE still fell only 0.0231 -> 0.0178 — because 86
 held-out items are Open-Jev's, whose near one-hot targets pull the temperatures towards
 confidence that typed-decisions does not earn. So typed-decisions ECE is worse than td-v1's
 (0.1876 vs 0.1357) even though accuracy is much better. Calibrate per workload: fit on the
-workload's own data with `laya train --calib-data`, or afterwards with `Agent.fit_temperatures`
-and `laya.load(..., calibration=...)`. Accuracy is unaffected — temperature scaling never moves
+workload's own data with `peewee train --calib-data`, or afterwards with `Agent.fit_temperatures`
+and `peewee_decide.load(..., calibration=...)`. Accuracy is unaffected — temperature scaling never moves
 an argmax.
 
 Evidence in `reports/trinity-prime-20260922/`.

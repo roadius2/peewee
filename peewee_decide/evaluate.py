@@ -1,4 +1,4 @@
-"""`laya eval`: score a checkpoint on JSONL cases (see `laya.data`).
+"""`peewee eval`: score a checkpoint on JSONL cases (see `peewee_decide.data`).
 
 Accuracy is against each question's reference answer (the hard label when the case has one,
 else the target argmax; noul counts p(true) >= 0.5 as true), which is how the upstream notebook
@@ -95,9 +95,9 @@ def format_report(rep: Dict[str, Any]) -> str:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="laya eval", description="Score a checkpoint on JSONL cases.")
+    ap = argparse.ArgumentParser(prog="peewee eval", description="Score a checkpoint on JSONL cases.")
     ap.add_argument("model", help="checkpoint directory or name (english, multilingual, typed-decisions)")
-    ap.add_argument("--data", required=True, help="cases, JSONL (schema in laya/data.py)")
+    ap.add_argument("--data", required=True, help="cases, JSONL (schema in peewee_decide/data.py)")
     ap.add_argument("--device", help="cuda, cpu or mps (default: best available)")
     ap.add_argument("--truncate", choices=["left", "right"], help="state truncation side (default: runtime default)")
     ap.add_argument("--out", help="write the full report as JSON here")

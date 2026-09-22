@@ -187,7 +187,7 @@ def main():
     ap.add_argument("--big-len", type=int, default=8192, help="max_len used for the no-truncation padded runs")
     args = ap.parse_args()
 
-    import laya
+    import peewee_decide
     import torch
     from datasets import concatenate_datasets, load_dataset
     from gpu_validate import CHECKPOINTS
@@ -198,12 +198,12 @@ def main():
     imdb = concatenate_datasets([load_dataset("stanfordnlp/imdb", split=s) for s in ("train", "test")])
     fillers = list(load_dataset("fancyzhx/ag_news", split="train").shuffle(seed=0).select(range(4000))["text"])
     short = load_dataset("stanfordnlp/imdb", split="test").shuffle(seed=1)
-    rep: Dict[str, Any] = {"env": {"host": platform.node(), "torch": torch.__version__, "laya": laya.__version__,
+    rep: Dict[str, Any] = {"env": {"host": platform.node(), "torch": torch.__version__, "peewee": peewee_decide.__version__,
                                    "date": time.strftime("%Y-%m-%d %H:%M")}, "args": vars(args), "checkpoints": {}}
     for name in [m.strip() for m in args.models.split(",") if m.strip()]:
         repo, sub = CHECKPOINTS[name]
         print("\n== %s" % name, flush=True)
-        agent = laya.load(repo, subfolder=sub, device=args.device)
+        agent = peewee_decide.load(repo, subfolder=sub, device=args.device)
         trained = int(agent.cfg.get("max_len", 512))
         long_rows = select_long(imdb, agent.tok, args.min_tokens, args.natural_samples, seed=0)
         short_rows = [r for r in short.select(range(2000)) if token_len(agent.tok, r["text"]) <= 300][:args.padded_samples]

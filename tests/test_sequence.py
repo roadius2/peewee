@@ -1,6 +1,6 @@
 """`build_sequence` and `collate_items` with a fake tokenizer: layout, budgets, truncation."""
 
-from laya.common import build_sequence, collate_items
+from peewee_decide.common import build_sequence, collate_items
 
 CHOICE = {"t": "choice", "ins": "Which team?", "crit": {"billing": "invoices", "tech": "bugs", "sales": None}}
 

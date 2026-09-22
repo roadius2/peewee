@@ -1,4 +1,4 @@
-"""Laya: Fast, non-autoregressive System 1 decision engine with calibrated probabilities."""
+"""Peewee: a small, fast reflex model that answers typed questions about a state in one forward pass."""
 
 from .agent import Agent, RLAgent, load
 from .calibrate import (

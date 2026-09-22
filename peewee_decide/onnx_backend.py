@@ -1,8 +1,8 @@
 """ONNX export and an ONNX Runtime backend for CPU (and CUDA) serving.
 
-    laya export-onnx convaiinnovations/laya ./laya-english-onnx --quantize
-    python -c "from laya.onnx_backend import OnnxAgent; a = OnnxAgent('./laya-english-onnx'); print(a.predict(...))"
-    LAYA_BACKEND=onnx LAYA_MODELS=english=./laya-english-onnx laya serve
+    peewee export-onnx convaiinnovations/laya ./peewee-english-onnx --quantize
+    python -c "from peewee_decide.onnx_backend import OnnxAgent; a = OnnxAgent('./peewee-english-onnx'); print(a.predict(...))"
+    PEEWEE_BACKEND=onnx PEEWEE_MODELS=english=./peewee-english-onnx peewee serve
 
 The decision model is an encoder plus a small transformer head and two MLPs, all standard ops,
 so it exports cleanly. Dynamic int8 quantisation of the linear layers roughly halves CPU
@@ -26,7 +26,7 @@ from .agent import Agent, _tokenizer_dir, resolve_checkpoint
 from .calibrate import calibration_payload
 from .common import collate_items
 
-logger = logging.getLogger("laya.onnx")
+logger = logging.getLogger("peewee.onnx")
 
 INPUT_NAMES = ["input_ids", "attention_mask", "marker_pos", "marker_mask", "qtype"]
 OUTPUT_NAMES = ["logits", "act_logits"]
@@ -80,7 +80,7 @@ def export_onnx(agent: Agent, out_dir: str, quantize: bool = False, opset: int =
         model.manual_head_attention = was_manual
         model.to(device=orig_device, dtype=orig_dtype)   # leave the caller's agent usable
     export_seconds = time.perf_counter() - t0
-    logger.info("laya.onnx: exported %s in %.1fs", onnx_path, export_seconds)
+    logger.info("peewee.onnx: exported %s in %.1fs", onnx_path, export_seconds)
 
     # runtime companions
     with open(os.path.join(out_dir, "rl_agent_config.json"), "w") as f:
@@ -107,7 +107,7 @@ def export_onnx(agent: Agent, out_dir: str, quantize: bool = False, opset: int =
         meta.update({"quantized": True, "quantize_seconds": round(time.perf_counter() - t0, 2),
                      "quantization": "weight-only int8 (MatMulNBits, block 128, symmetric); encoder MatMul weights "
                                      "only, decision head and attention products fp32"})
-        logger.info("laya.onnx: wrote %s", q_path)
+        logger.info("peewee.onnx: wrote %s", q_path)
     with open(os.path.join(out_dir, "onnx_export.json"), "w") as f:
         json.dump(meta, f, indent=2)
     return meta
@@ -119,7 +119,7 @@ def _weight_only_quantizer():
     try:
         from onnxruntime.quantization.matmul_nbits_quantizer import DefaultWeightOnlyQuantConfig, MatMulNBitsQuantizer
     except ImportError as e:
-        raise RuntimeError("--quantize needs onnxruntime>=1.22 (Python >= 3.10) and onnx-ir: pip install 'laya[onnx]' "
+        raise RuntimeError("--quantize needs onnxruntime>=1.22 (Python >= 3.10) and onnx-ir: pip install 'peewee-decide[onnx]' "
                            "(%s)" % e) from None
     return DefaultWeightOnlyQuantConfig, MatMulNBitsQuantizer
 
@@ -188,14 +188,14 @@ class OnnxAgent(Agent):
         q_path, f_path = os.path.join(model_dir, "model.int8.onnx"), os.path.join(model_dir, "model.onnx")
         self.onnx_path = q_path if (prefer_quantized and os.path.exists(q_path)) else f_path
         if not os.path.exists(self.onnx_path):
-            raise FileNotFoundError("no model.onnx in %r; run `laya export-onnx` first" % path)
+            raise FileNotFoundError("no model.onnx in %r; run `peewee export-onnx` first" % path)
         self.quantized = self.onnx_path.endswith(".int8.onnx")
 
         available = ort.get_available_providers()
         if providers is None:
             providers = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in available]
             if "CUDAExecutionProvider" not in available and torch.cuda.is_available():
-                logger.warning("laya.onnx: torch sees a CUDA device but this onnxruntime build has no "
+                logger.warning("peewee.onnx: torch sees a CUDA device but this onnxruntime build has no "
                                "CUDAExecutionProvider; running %s on CPU. Install onnxruntime-gpu, or pass "
                                "providers=['CPUExecutionProvider'] to silence this.", os.path.basename(self.onnx_path))
         else:
@@ -213,7 +213,7 @@ class OnnxAgent(Agent):
         self.dtype = torch.float32
         self.fell_back_to_cpu = False
         self.model = None
-        logger.info("laya.onnx: loaded %s on %s", self.onnx_path, self.providers)
+        logger.info("peewee.onnx: loaded %s on %s", self.onnx_path, self.providers)
 
     def _forward_logits(self, items: List[Dict]) -> Tuple[np.ndarray, np.ndarray, int]:
         b = collate_items([items], self.tok.pad_token_id)
@@ -237,7 +237,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     from .agent import load
 
-    p = argparse.ArgumentParser(prog="laya export-onnx", description="Export a Laya checkpoint to ONNX")
+    p = argparse.ArgumentParser(prog="peewee export-onnx", description="Export a Peewee checkpoint to ONNX")
     p.add_argument("checkpoint", help="hub id or local path, e.g. convaiinnovations/laya")
     p.add_argument("out_dir")
     p.add_argument("--subfolder", help="checkpoint subfolder in a bundle repo, e.g. multilingual")
