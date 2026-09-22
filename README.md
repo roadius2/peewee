@@ -62,23 +62,31 @@ each dataset's hard labels, scored by `peewee eval`:
 | Peewee trained on typed-decisions only | 0.7560 | 0.5455 | 0.6193 |
 | Peewee trained on Open-Jev only | 0.4215 | 0.9390 | 0.8274 |
 | Laya's published typed-decisions checkpoint | 0.7685 | — | — |
-| TypeSafe Jev 1.13.0 *(published, not measured here)* | *0.727* | — | — |
+| TypeSafe Jev 1.13.0 *(measured here, same cases)* | 0.7385 | 0.8104 | 0.8031 |
 | teacher self-agreement ceiling | *0.735* | — | — |
 
-Two things worth pulling out. **Mixing datasets beats specialising**: one checkpoint trained on
-both corpora beats each single-corpus checkpoint on its own home turf, and clears the ceiling set
-by how often the teacher agrees with itself. And **the gap to a generative judge is not accuracy,
-it is latency** — Jev is independently published at 236–276 ms per decision; Peewee answers in
-33 ms on a T4 and batches questions for free, because a call is one forward pass no matter how
-many questions ride along.
+Three points stand out:
 
-| | Peewee | Jev *(published)* |
+- **Mixing datasets beats specialising.** One checkpoint trained on both corpora beats each
+  single-corpus checkpoint on its own home turf. It also clears the ceiling set by how often the
+  teacher agrees with itself.
+- **Against Jev, Peewee leads on accuracy on all three splits.** Peewee trained on the typed-decisions
+  and Open-Jev train splits, so the out-of-distribution split is the fair one. There the lead is
+  0.831 to 0.803, and it comes from score questions.
+- **Jev is better calibrated.** Its confidence tracks reality more closely on two of the three splits
+  (ECE 0.045 against 0.188 on typed-decisions, 0.049 against 0.135 on OOD). Fitting temperatures
+  per workload is the open item.
+
+A Peewee call is one forward pass however many questions ride along, so extra questions cost
+almost nothing.
+
+| | Peewee | Jev *(measured, API)* |
 |---|---|---|
-| p50, one question | **33 ms** (T4) | *236–276 ms* |
+| p50 per case (about 5 questions) | **17 ms** (RTX 5090), 299 ms (M5 Max laptop) | 282 ms |
 | questions/second, one GPU | **1,338** (RTX 5090, 32 clients) | — |
 | questions/second, 8 CPU cores | 41 | — |
-| calibration error after fitting | **0.081** | *0.144* |
-| cost per million decisions | your electricity | per-token API pricing |
+| ECE, OOD split | 0.135 | **0.049** |
+| cost per million decisions | your electricity | per-token API pricing (about $0.19 for this 28k-question benchmark) |
 
 Full methodology, per-workflow breakdowns, the honest losses and every raw report:
 [`BENCHMARKS.md`](BENCHMARKS.md) and [`reports/`](reports/).
