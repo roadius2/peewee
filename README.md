@@ -543,6 +543,7 @@ laya prepare-data typed-decisions --out data/typed-decisions
 laya train --data data/typed-decisions/train.jsonl --base english --out runs/td-v1 \
            --max-len 1024 --head-max-len 256
 laya eval runs/td-v1 --data data/typed-decisions/test.jsonl
+laya prepare-data open-jev --out data/open-jev          # Open-Jev release-v2 (CC0), five splits
 ```
 
 `laya train` holds out a tenth of the cases, fits calibration temperatures on them, and writes a
@@ -556,6 +557,11 @@ TypeSafe Jev's published 0.727 and above the 0.735 teacher self-agreement ceilin
 as a fast base to specialise, not as a zero-shot decision engine.
 
 Runtime on 2xT4 is roughly 4-5 hours for 4 epochs over ~30k questions.
+
+`laya prepare-data open-jev` converts the public [Open-Jev dataset](https://huggingface.co/datasets/ZefanCai/Open-Jev)
+(CC0-1.0, pinned revision), one case per distinct state; `--config` selects another of its
+configs, such as `context-retention-control-v1`. Cases that are variants of each other share a
+group and are never split between training and calibration.
 
 ---
 

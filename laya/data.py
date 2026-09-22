@@ -14,6 +14,7 @@ reference answer for accuracy when present. Option order is `laya.common.render_
 """
 import argparse
 import collections
+import hashlib
 import json
 import os
 import random
@@ -182,12 +183,16 @@ def record_to_items(rec: Dict[str, Any], tok, max_len: int, head_max_len: int,
     return items, skipped
 
 
+def _group_of(rec: Dict[str, Any]) -> str:
+    return str((rec.get("meta") or {}).get("group") or rec["id"])
+
+
 def split_cases(records: Sequence[Dict[str, Any]], fraction: float,
                 seed: int = 0) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Split whole cases into `(train, held_out)`.
+    """Split whole cases into `(train, held_out)`, keeping every case of a `meta.group` together.
 
     Deterministic for a given set of ids and seed, whatever order the records arrive in. A
-    positive fraction holds out at least one case and always leaves at least one for training.
+    positive fraction holds out at least one group and always leaves at least one for training.
     """
     if not 0.0 <= fraction < 1.0:
         raise ValueError("held-out fraction must be in [0, 1), got %r" % (fraction,))
@@ -195,13 +200,13 @@ def split_cases(records: Sequence[Dict[str, Any]], fraction: float,
     dups = sorted(i for i, c in collections.Counter(ids).items() if c > 1)
     if dups:
         raise ValueError("duplicate case ids: %s" % dups[:5])
-    n = int(round(len(ids) * fraction))
-    if fraction > 0 and len(ids) > 1:
-        n = min(max(n, 1), len(ids) - 1)
-    order = sorted(ids)
-    random.Random(seed).shuffle(order)
-    held = set(order[:n])
-    return [r for r in records if r["id"] not in held], [r for r in records if r["id"] in held]
+    groups = sorted({_group_of(r) for r in records})
+    n = int(round(len(groups) * fraction))
+    if fraction > 0 and len(groups) > 1:
+        n = min(max(n, 1), len(groups) - 1)
+    random.Random(seed).shuffle(groups)
+    held = set(groups[:n])
+    return [r for r in records if _group_of(r) not in held], [r for r in records if _group_of(r) in held]
 
 
 TYPED_DECISIONS = "LocalLLaMA/typed-decisions"
@@ -226,26 +231,81 @@ def convert_typed_decisions_row(row: Dict[str, Any]) -> Dict[str, Any]:
             "targets": targets, "meta": meta}
 
 
-def convert_typed_decisions(split: str) -> List[Dict[str, Any]]:
+def _load_dataset():
     try:
         from datasets import load_dataset
     except ImportError as e:
         raise ImportError("`laya prepare-data` needs the datasets package: pip install 'laya[train]'") from e
-    return [convert_typed_decisions_row(r) for r in load_dataset(TYPED_DECISIONS, "all", split=split)]
+    return load_dataset
+
+
+def convert_typed_decisions(split: str) -> List[Dict[str, Any]]:
+    return [convert_typed_decisions_row(r) for r in _load_dataset()(TYPED_DECISIONS, "all", split=split)]
+
+
+OPEN_JEV = "ZefanCai/Open-Jev"
+OPEN_JEV_REVISION = "c67699e13d0ae25e35b77165a4b6b079bedc8aba"
+OPEN_JEV_SPLITS = ("train", "calibration", "validation", "test", "ood")
+OPEN_JEV_DEFAULT_CONFIG = "release-v2-redistributable"
+
+
+def open_jev_question(row: Dict[str, Any]) -> Dict[str, Any]:
+    """One Open-Jev row's question in laya's question format."""
+    kind, options = row["kind"], [str(o) for o in row["options"]]
+    if len(set(options)) != len(options):
+        raise ValueError("%s: duplicate option strings %s" % (row["id"], options))
+    if kind == "choice":
+        return {"type": "choice", "instructions": row["question"], "criteria": {o: None for o in options}}
+    if kind == "score":
+        return {"type": "score", "instructions": row["question"], "criteria": options}
+    if kind == "noul":
+        if [o.lower() for o in options] != ["no", "yes"]:
+            raise ValueError("%s: noul options must be ['no', 'yes'], got %s" % (row["id"], options))
+        return {"type": "noul", "instructions": row["question"]}
+    raise ValueError("%s: unknown kind %r" % (row["id"], kind))
+
+
+def convert_open_jev_rows(rows) -> List[Dict[str, Any]]:
+    """Open-Jev rows (one question each) as case records: one case per distinct state within a group."""
+    cases: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for row in rows:
+        key = (row["group_id"], row["state_json"])
+        rec = cases.get(key)
+        if rec is None:
+            digest = hashlib.sha1(row["state_json"].encode("utf-8")).hexdigest()[:12]
+            rec = {"id": "%s:%s" % (row["group_id"], digest), "state": json.loads(row["state_json"]),
+                   "questions": {}, "targets": {},
+                   "meta": {"group": row["group_id"], "workflow": row["source"], "split": row["split"]}}
+            cases[key] = rec
+        rec["questions"][row["id"]] = open_jev_question(row)
+        rec["targets"][row["id"]] = {"probabilities": [float(x) for x in row["target"]]}
+    return list(cases.values())
+
+
+def convert_open_jev(config: str, split: str, revision: str = OPEN_JEV_REVISION) -> List[Dict[str, Any]]:
+    return convert_open_jev_rows(_load_dataset()(OPEN_JEV, config, split=split, revision=revision))
+
+
+def _write_split(out_dir: str, split: str, records: List[Dict[str, Any]]) -> None:
+    for r in records:
+        validate_record(r)
+    path = os.path.join(out_dir, split + ".jsonl")
+    write_jsonl(path, records)
+    print("%s: %d cases, %d questions -> %s" % (split, len(records), sum(len(r["questions"]) for r in records), path))
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="laya prepare-data",
-                                 description="Write a public dataset as laya training JSONL (train.jsonl, test.jsonl).")
-    ap.add_argument("dataset", choices=["typed-decisions"])
+    ap = argparse.ArgumentParser(prog="laya prepare-data", description="Write a public dataset as laya training JSONL.")
+    ap.add_argument("dataset", choices=["typed-decisions", "open-jev"])
     ap.add_argument("--out", required=True, help="output directory")
+    ap.add_argument("--config", default=OPEN_JEV_DEFAULT_CONFIG, help="open-jev only: dataset config")
+    ap.add_argument("--revision", default=OPEN_JEV_REVISION, help="open-jev only: pinned dataset revision")
     args = ap.parse_args(argv)
     os.makedirs(args.out, exist_ok=True)
-    for split in ("train", "test"):
-        records = convert_typed_decisions(split)
-        for r in records:
-            validate_record(r)
-        path = os.path.join(args.out, split + ".jsonl")
-        write_jsonl(path, records)
-        print("%s: %d cases, %d questions -> %s" % (split, len(records), sum(len(r["questions"]) for r in records), path))
+    if args.dataset == "typed-decisions":
+        for split in ("train", "test"):
+            _write_split(args.out, split, convert_typed_decisions(split))
+    else:
+        for split in OPEN_JEV_SPLITS:
+            _write_split(args.out, split, convert_open_jev(args.config, split, args.revision))
     return 0

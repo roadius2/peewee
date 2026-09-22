@@ -2,8 +2,9 @@
 import json
 import pytest
 
-from laya.data import (convert_typed_decisions_row, main as prepare_main, option_keys, read_jsonl, record_to_items,
-                       reference_index, split_cases, target_vector, validate_record, write_jsonl)
+from laya.data import (convert_open_jev_rows, convert_typed_decisions_row, main as prepare_main, option_keys,
+                       read_jsonl, record_to_items, reference_index, split_cases, target_vector, validate_record,
+                       write_jsonl)
 from tests.conftest import FakeTokenizer
 
 TOK = FakeTokenizer()
@@ -172,3 +173,67 @@ def test_prepare_data_writes_train_and_test(tmp_path, monkeypatch):
     assert prepare_main(["typed-decisions", "--out", str(tmp_path)]) == 0
     assert [r["id"] for r in read_jsonl(str(tmp_path / "train.jsonl"))] == ["train"]
     assert [r["id"] for r in read_jsonl(str(tmp_path / "test.jsonl"))] == ["test"]
+
+
+def _oj_rows():
+    base = {"group_id": "g1", "split": "train", "source": "customer-control-v1"}
+    s1 = json.dumps({"ticket": "refund please"})
+    s2 = json.dumps({"ticket": "app crashes"})
+    return [
+        dict(base, id="g1:cat", kind="choice", question="Which category?", options=["billing: money", "bug: defects"],
+             target=[0.9, 0.1], state_json=s1),
+        dict(base, id="g1:angry", kind="noul", question="Is the user angry?", options=["no", "yes"],
+             target=[0.0, 1.0], state_json=s1),
+        dict(base, id="g1:sev", kind="score", question="Severity?", options=["low", "mid", "high"],
+             target=[0.2, 0.5, 0.3], state_json=s1),
+        dict(base, id="g1:cat2", kind="choice", question="Which category?", options=["bug: defects", "billing: money"],
+             target=[1.0, 0.0], state_json=s2),
+    ]
+
+
+def test_open_jev_rows_group_into_one_case_per_state():
+    recs = convert_open_jev_rows(_oj_rows())
+    assert len(recs) == 2 and len({r["id"] for r in recs}) == 2
+    for r in recs:
+        validate_record(r)
+    first = next(r for r in recs if "g1:cat" in r["questions"])
+    assert set(first["questions"]) == {"g1:cat", "g1:angry", "g1:sev"}
+    assert first["state"] == {"ticket": "refund please"}
+    assert first["meta"] == {"group": "g1", "workflow": "customer-control-v1", "split": "train"}
+    assert option_keys(first["questions"]["g1:cat"]) == ["billing: money", "bug: defects"]
+    assert target_vector(first["questions"]["g1:cat"], first["targets"]["g1:cat"]) == pytest.approx([0.9, 0.1])
+    assert target_vector(first["questions"]["g1:angry"], first["targets"]["g1:angry"]) == [0.0, 1.0]
+    assert first["questions"]["g1:sev"]["criteria"] == ["low", "mid", "high"]
+
+
+@pytest.mark.parametrize("change, message", [
+    ({"kind": "rank"}, "unknown kind"),
+    ({"kind": "noul", "options": ["false", "true"]}, "noul options"),
+    ({"options": ["same", "same"]}, "duplicate option"),
+])
+def test_bad_open_jev_rows_raise(change, message):
+    with pytest.raises(ValueError, match=message):
+        convert_open_jev_rows([dict(_oj_rows()[0], **change)])
+
+
+def test_split_keeps_a_group_together():
+    recs = [_record(id="g%d-v%d" % (g, v), meta={"group": "g%d" % g}) for g in range(10) for v in range(3)]
+    train, held = split_cases(recs, 0.3, seed=0)
+    held_groups = {r["meta"]["group"] for r in held}
+    assert len(held_groups) == 3 and len(held) == 9
+    assert not held_groups & {r["meta"]["group"] for r in train}
+
+
+def test_prepare_data_open_jev_writes_every_split(tmp_path, monkeypatch):
+    import laya.data as data
+    calls = []
+
+    def fake(config, split, revision):
+        calls.append((config, split, revision))
+        return convert_open_jev_rows([dict(r, split=split) for r in _oj_rows()])
+
+    monkeypatch.setattr(data, "convert_open_jev", fake)
+    assert prepare_main(["open-jev", "--out", str(tmp_path), "--config", "context-retention-control-v1"]) == 0
+    assert [c[1] for c in calls] == ["train", "calibration", "validation", "test", "ood"]
+    assert {c[0] for c in calls} == {"context-retention-control-v1"} and calls[0][2] == data.OPEN_JEV_REVISION
+    assert len(read_jsonl(str(tmp_path / "ood.jsonl"))) == 2

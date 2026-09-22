@@ -25,6 +25,8 @@ upstream v0.3.4 (`d113dca`).
   question type and workflow for any checkpoint on JSONL cases.
 - **`laya prepare-data typed-decisions`**: writes the public typed-decisions dataset as JSONL,
   keeping both the teacher distribution and the hard label. `pip install "laya[train]"`.
+  `laya prepare-data open-jev` does the same for the public Open-Jev dataset (CC0, pinned
+  revision), and the calibration split keeps variants of one case together.
 - **`laya serve`** (`laya/serving.py`): a FastAPI service around a preloaded `Router` with one
   `DynamicBatcher` per checkpoint. Requests are routed in pure Python, queued per checkpoint, and
   flushed into `Agent.predict_many` when `LAYA_MAX_BATCH` questions are waiting or
