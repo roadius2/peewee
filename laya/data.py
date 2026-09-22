@@ -12,8 +12,10 @@ A target holds `probabilities` (keys: choice keys, score levels "0".."k-1", or "
 a hard `label`, or both. `probabilities` is the training signal when present; `label` is the
 reference answer for accuracy when present. Option order is `laya.common.render_options` order.
 """
+import argparse
 import collections
 import json
+import os
 import random
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -200,3 +202,50 @@ def split_cases(records: Sequence[Dict[str, Any]], fraction: float,
     random.Random(seed).shuffle(order)
     held = set(order[:n])
     return [r for r in records if r["id"] not in held], [r for r in records if r["id"] in held]
+
+
+TYPED_DECISIONS = "LocalLLaMA/typed-decisions"
+
+
+def _maybe_json(value: Any) -> Any:
+    if isinstance(value, str) and value.lstrip()[:1] in ("{", "["):
+        try:
+            return json.loads(value)
+        except ValueError:
+            return value
+    return value
+
+
+def convert_typed_decisions_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    """One `LocalLLaMA/typed-decisions` row as a case record: teacher distribution plus hard label."""
+    questions = _maybe_json(row["questions"])
+    gold = _maybe_json(row["gold"])
+    targets = {qid: {"probabilities": gold[qid]["probabilities"], "label": gold[qid]["label"]} for qid in questions}
+    meta = {k: row[k] for k in ("workflow", "split", "label_agreement") if k in row}
+    return {"id": str(row["id"]), "state": _maybe_json(row["state"]), "questions": questions,
+            "targets": targets, "meta": meta}
+
+
+def convert_typed_decisions(split: str) -> List[Dict[str, Any]]:
+    try:
+        from datasets import load_dataset
+    except ImportError as e:
+        raise ImportError("`laya prepare-data` needs the datasets package: pip install 'laya[train]'") from e
+    return [convert_typed_decisions_row(r) for r in load_dataset(TYPED_DECISIONS, "all", split=split)]
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="laya prepare-data",
+                                 description="Write a public dataset as laya training JSONL (train.jsonl, test.jsonl).")
+    ap.add_argument("dataset", choices=["typed-decisions"])
+    ap.add_argument("--out", required=True, help="output directory")
+    args = ap.parse_args(argv)
+    os.makedirs(args.out, exist_ok=True)
+    for split in ("train", "test"):
+        records = convert_typed_decisions(split)
+        for r in records:
+            validate_record(r)
+        path = os.path.join(args.out, split + ".jsonl")
+        write_jsonl(path, records)
+        print("%s: %d cases, %d questions -> %s" % (split, len(records), sum(len(r["questions"]) for r in records), path))
+    return 0

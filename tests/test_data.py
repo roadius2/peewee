@@ -1,8 +1,9 @@
 """laya.data: JSONL schema, target vectors and reference answers. No weights, no network."""
+import json
 import pytest
 
-from laya.data import (option_keys, read_jsonl, record_to_items, reference_index, split_cases, target_vector,
-                       validate_record, write_jsonl)
+from laya.data import (convert_typed_decisions_row, main as prepare_main, option_keys, read_jsonl, record_to_items,
+                       reference_index, split_cases, target_vector, validate_record, write_jsonl)
 from tests.conftest import FakeTokenizer
 
 TOK = FakeTokenizer()
@@ -139,3 +140,35 @@ def test_split_edge_cases():
         split_cases(_cases(2) + _cases(1), 0.5, seed=0)
     with pytest.raises(ValueError, match="fraction"):
         split_cases(_cases(4), 1.0, seed=0)
+
+
+def _td_row():
+    return {"id": 7, "workflow": "customer_service", "split": "test", "label_agreement": 0.8,
+            "state": json.dumps({"ticket": "refund please"}),
+            "questions": json.dumps({"team": CHOICE, "urgent": SCORE, "angry": NOUL}),
+            "gold": json.dumps({
+                "team": {"label": "tech", "probabilities": {"billing": 0.5, "tech": 0.3, "other": 0.2}, "type": "choice"},
+                "urgent": {"label": "2", "probabilities": {"0": 0.1, "1": 0.2, "2": 0.6, "3": 0.1}, "type": "score"},
+                "angry": {"label": "false", "probabilities": {"false": 0.9, "true": 0.1}, "type": "noul"}})}
+
+
+def test_typed_decisions_rows_convert_to_valid_records():
+    rec = convert_typed_decisions_row(_td_row())
+    validate_record(rec)
+    assert rec["id"] == "7" and rec["state"] == {"ticket": "refund please"}
+    assert rec["targets"]["team"] == {"probabilities": {"billing": 0.5, "tech": 0.3, "other": 0.2}, "label": "tech"}
+    assert rec["meta"] == {"workflow": "customer_service", "split": "test", "label_agreement": 0.8}
+    assert reference_index(rec["questions"]["team"], rec["targets"]["team"]) == 1
+
+
+def test_plain_text_states_are_kept_as_text():
+    assert convert_typed_decisions_row(dict(_td_row(), state="just a sentence"))["state"] == "just a sentence"
+
+
+def test_prepare_data_writes_train_and_test(tmp_path, monkeypatch):
+    import laya.data as data
+    monkeypatch.setattr(data, "convert_typed_decisions",
+                        lambda split: [convert_typed_decisions_row(dict(_td_row(), id=split))])
+    assert prepare_main(["typed-decisions", "--out", str(tmp_path)]) == 0
+    assert [r["id"] for r in read_jsonl(str(tmp_path / "train.jsonl"))] == ["train"]
+    assert [r["id"] for r in read_jsonl(str(tmp_path / "test.jsonl"))] == ["test"]

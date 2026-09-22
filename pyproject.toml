@@ -45,6 +45,9 @@ onnx = [
     "onnxruntime>=1.17",
     "onnx-ir",
 ]
+train = [
+    "datasets>=2.14",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.5",

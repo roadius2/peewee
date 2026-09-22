@@ -53,3 +53,7 @@ CLAUDE.local.md
 # local validation outputs (report.md and calibration/*.json are committed by hand)
 reports/*/onnx/
 .venv/
+
+# training data and runs (laya prepare-data / laya train)
+/data/
+/runs/
