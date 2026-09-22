@@ -548,7 +548,16 @@ laya prepare-data open-jev --out data/open-jev          # Open-Jev release-v2 (C
 
 `laya train` holds out a tenth of the cases, fits calibration temperatures on them, and writes a
 checkpoint that `laya.Agent` loads directly, plus `train_meta.json` with the settings, data hash
-and per-epoch metrics. `laya train --help` lists every setting.
+and per-epoch metrics. `laya train --help` lists every setting. To train on several datasets,
+repeat `--data`; `FILE:N` repeats that file's training cases N times per epoch (upsampling after
+the held-out split, so a case never lands on both sides). `--calib-data FILE` calibrates on a
+dataset's own calibration split instead of splitting `--data`, and `--calibration-target label`
+fits temperatures to the hard label `laya eval` scores rather than to the teacher distribution:
+
+```bash
+laya train --data data/typed-decisions/train.jsonl:4 --data data/open-jev/train.jsonl \
+           --calibration-target label --base english --out runs/mix-v1 --max-len 1024 --head-max-len 256
+```
 
 Fine-tuning is where most of the value is. On the typed-decisions benchmark the base
 checkpoints score near chance zero-shot (0.36 and 0.35 against a 0.318 random baseline),

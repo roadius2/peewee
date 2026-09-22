@@ -6,6 +6,7 @@ against the target distribution (`laya.common.proper_reward`), with a group-rela
 baseline, plus soft cross-entropy.
 """
 import argparse
+import collections
 import contextlib
 import hashlib
 import json
@@ -15,14 +16,14 @@ import os
 import random
 import time
 from dataclasses import asdict, dataclass, fields
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
 
 from .agent import _tokenizer_dir, resolve_checkpoint
 from .common import build_model, collate_items, proper_reward
-from .data import read_jsonl, record_to_items, split_cases, target_vector, validate_record
+from .data import _group_of, read_jsonl, record_to_items, reference_index, split_cases, target_vector, validate_record
 
 logger = logging.getLogger("laya.train")
 
@@ -77,6 +78,7 @@ class TrainConfig:
     w_rps: float = 1.0
     ce_weight: float = 1.0
     calib_fraction: float = 0.1
+    calibration_target: str = "probabilities"
     seed: int = 0
     max_len: Optional[int] = None
     head_max_len: Optional[int] = None
@@ -88,6 +90,8 @@ class TrainConfig:
 
 
 _PRECISIONS = ("auto", "bf16", "fp16", "fp32")
+_CALIBRATION_TARGETS = ("probabilities", "label")
+_CHOICES = {"precision": _PRECISIONS, "calibration_target": _CALIBRATION_TARGETS}
 _OPTIONAL_INT_FIELDS = ("max_len", "head_max_len")
 
 
@@ -252,9 +256,22 @@ def _save_checkpoint(model, tok, cfg: Dict[str, Any], out_dir: str) -> None:
     _write_json(os.path.join(out_dir, "rl_agent_config.json"), cfg)
 
 
+def _calibration_target(qdef: Dict[str, Any], target: Dict[str, Any], kind: str) -> List[float]:
+    """What temperatures are fitted to: the training distribution, or a one-hot of the reference answer."""
+    if kind == "probabilities":
+        return target_vector(qdef, target)
+    v = [0.0] * len(target_vector(qdef, target))
+    v[reference_index(qdef, target)] = 1.0
+    return v
+
+
 def _calibrate(out_dir: str, held: Sequence[Dict[str, Any]], device: torch.device,
-               skipped: Sequence[str] = ()) -> Optional[Dict[str, Any]]:
+               skipped: Sequence[str] = (), target: str = "probabilities") -> Optional[Dict[str, Any]]:
     """Load the saved checkpoint back through the runtime and fit temperatures on the held-out cases.
+
+    `target` is `calibration_target`: "probabilities" fits NLL against each question's training
+    distribution (a teacher's soft labels); "label" fits against the reference answer that
+    `laya eval` scores (the hard label, else the distribution's argmax).
 
     `skipped` names the "case/qid" questions `record_to_items` dropped during training (options
     that do not fit `max_len`/`head_max_len`). Those must not be sent through the runtime, which
@@ -270,7 +287,7 @@ def _calibrate(out_dir: str, held: Sequence[Dict[str, Any]], device: torch.devic
         questions = {qid: qd for qid, qd in r["questions"].items() if "%s/%s" % (r["id"], qid) not in skip}
         if not questions:
             continue
-        targets = {qid: target_vector(qd, r["targets"][qid]) for qid, qd in questions.items()}
+        targets = {qid: _calibration_target(qd, r["targets"][qid], target) for qid, qd in questions.items()}
         examples.append((r["state"], questions, targets))
     recs = collect_records(agent, examples, batch_size=32)
     del agent
@@ -284,10 +301,31 @@ def _calibrate(out_dir: str, held: Sequence[Dict[str, Any]], device: torch.devic
             "heldout_ece_before": rep["before"]["ece"], "heldout_ece_after": rep["after"]["ece"]}
 
 
+def _check_disjoint(records: Sequence[Dict[str, Any]], calib: Sequence[Dict[str, Any]]) -> None:
+    ids = {r["id"] for r in records} & {r["id"] for r in calib}
+    groups = {_group_of(r) for r in records} & {_group_of(r) for r in calib}
+    if ids or groups:
+        raise ValueError("calibration cases overlap the training data (ids %s, groups %s)"
+                         % (sorted(ids)[:5], sorted(groups)[:5]))
+
+
+def _sha256s(path: Union[str, Sequence[str], None]):
+    if path is None or isinstance(path, str):
+        return _sha256(path) if path else None
+    return [_sha256(p) for p in path]
+
+
 def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optional[TrainConfig] = None,
-          device: Optional[str] = None, overwrite: bool = False, data_path: Optional[str] = None,
-          token: Optional[str] = None) -> Dict[str, Any]:
-    """Fine-tune `base` on `records`, calibrate on held-out cases, save to `out_dir`, return the run metadata."""
+          device: Optional[str] = None, overwrite: bool = False, data_path: Union[str, Sequence[str], None] = None,
+          token: Optional[str] = None, calib_records: Optional[Sequence[Dict[str, Any]]] = None,
+          calib_path: Optional[str] = None, repeat: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
+    """Fine-tune `base` on `records`, calibrate on held-out cases, save to `out_dir`, return the run metadata.
+
+    `calib_records`, when given, are the held-out cases (e.g. a dataset's official calibration
+    split): training then uses every record and `calib_fraction` is ignored. `repeat` maps case
+    ids to how many times their items appear per epoch; it upsamples training cases only, after
+    the held-out split, so a repeated case never lands on both sides.
+    """
     import transformers
 
     import laya
@@ -296,8 +334,13 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
     if not overwrite and any(os.path.exists(os.path.join(out_dir, n)) for n in ("model.safetensors",
                                                                                    "rl_agent_config.json")):
         raise FileExistsError("%s already holds a checkpoint; pass overwrite=True (--overwrite) to replace it" % out_dir)
-    for r in records:
+    if cfg.calibration_target not in _CALIBRATION_TARGETS:
+        raise ValueError("calibration_target must be one of %s, got %r"
+                         % (_CALIBRATION_TARGETS, cfg.calibration_target))
+    for r in list(records) + list(calib_records or ()):
         validate_record(r)
+    if calib_records is not None:
+        _check_disjoint(records, calib_records)
     dev = pick_device(device)
     amp, use_scaler = _precision(cfg.precision, dev)
     _seed_everything(cfg.seed)
@@ -307,11 +350,14 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
     max_len = cfg.max_len or int(base_cfg.get("max_len", 512))
     head_max_len = cfg.head_max_len or int(base_cfg.get("head_max_len", 192))
 
-    train_recs, held = split_cases(records, cfg.calib_fraction, cfg.seed)
+    if calib_records is None:
+        train_recs, held = split_cases(records, cfg.calib_fraction, cfg.seed)
+    else:
+        train_recs, held = list(records), list(calib_records)
     items, skipped = _items(train_recs, tok, max_len, head_max_len)
     held_items, held_skipped = _items(held, tok, max_len, head_max_len)
     all_skipped = skipped + held_skipped
-    n_questions = sum(len(r["questions"]) for r in records)
+    n_questions = sum(len(r["questions"]) for r in list(train_recs) + list(held))
     if n_questions and len(all_skipped) / n_questions > cfg.max_skipped_fraction:
         raise ValueError("%d of %d questions do not fit max_len=%d / head_max_len=%d (first: %s); raise the lengths "
                          "or shorten the options" % (len(all_skipped), n_questions, max_len, head_max_len,
@@ -321,6 +367,11 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
     if all_skipped:
         logger.warning("laya.train: skipped %d questions whose options do not fit (first: %s)",
                        len(all_skipped), all_skipped[:3])
+    n_unique = len(items)
+    if repeat:
+        if any(int(n) < 1 for n in repeat.values()):
+            raise ValueError("repeat counts must be at least 1")
+        items = [it for it in items for _ in range(int(repeat.get(it["case"], 1)))]
 
     model = _load_model(model_dir, base_cfg).to(dev)
     model.train()
@@ -394,7 +445,7 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
     if dev.type == "cuda":
         torch.cuda.empty_cache()
 
-    calibration = _calibrate(out_dir, held, dev, held_skipped) if held else None
+    calibration = _calibrate(out_dir, held, dev, held_skipped, cfg.calibration_target) if held else None
     if calibration:
         out_cfg["temperature"] = calibration["temperature"]
         out_cfg["temperature_by_options"] = calibration["temperature_by_options"]
@@ -402,12 +453,15 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
     else:
         logger.warning("laya.train: no held-out questions; temperatures left at 1.0")
 
-    meta = {"base": base, "data": data_path, "data_sha256": _sha256(data_path) if data_path else None,
+    meta = {"base": base, "data": data_path, "data_sha256": _sha256s(data_path),
+            "calib_data": calib_path, "calib_data_sha256": _sha256s(calib_path),
             "config": asdict(cfg), "device": str(dev),
             "precision": {None: "fp32", torch.bfloat16: "bf16", torch.float16: "fp16"}[amp],
             "max_len": max_len, "head_max_len": head_max_len,
             "cases": {"train": len(train_recs), "heldout": len(held)},
-            "items": {"train": len(items), "heldout": len(held_items)},
+            "items": {"train": len(items), "train_unique": n_unique, "heldout": len(held_items)},
+            "repeated_cases": {str(n): c for n, c in sorted(collections.Counter(repeat.values()).items()) if n > 1}
+            if repeat else {},
             "skipped_questions": {"count": len(all_skipped), "first": all_skipped[:50]},
             "optimizer_steps": step, "epochs": epochs_log, "calibration": calibration,
             "git_commit": _git_commit(),
@@ -432,7 +486,8 @@ _CONFIG_HELP = {
     "w_sph": "weight of the spherical scoring term in the reward",
     "w_rps": "weight of the ranked probability scoring term in the reward",
     "ce_weight": "weight of the soft cross-entropy term in the loss",
-    "calib_fraction": "held-out share of cases used to fit temperatures",
+    "calib_fraction": "held-out share of cases used to fit temperatures (ignored with --calib-data)",
+    "calibration_target": "fit temperatures to the training distribution or to the reference answer (hard label)",
     "seed": "random seed for shuffling, noise and initialisation",
     "max_len": "maximum input token length (default: from the base checkpoint)",
     "head_max_len": "maximum token length reserved for the question and options",
@@ -450,16 +505,30 @@ def _add_config_args(ap: argparse.ArgumentParser) -> None:
         help_ = _CONFIG_HELP.get(f.name)
         if isinstance(f.default, bool):
             ap.add_argument(flag, action=argparse.BooleanOptionalAction, default=f.default, help=help_)
-        elif f.name == "precision":
-            ap.add_argument(flag, type=str, default=f.default, choices=_PRECISIONS, help=help_)
+        elif f.name in _CHOICES:
+            ap.add_argument(flag, type=str, default=f.default, choices=_CHOICES[f.name], help=help_)
         else:
             typ = int if f.name in _OPTIONAL_INT_FIELDS else type(f.default)
             ap.add_argument(flag, type=typ, default=f.default, help=help_)
 
 
+def _data_spec(value: str) -> Tuple[str, int]:
+    """`FILE` or `FILE:N`; a suffix that is not an integer stays part of the path."""
+    path, sep, n = value.rpartition(":")
+    if not sep or not n.lstrip("-").isdigit():
+        return value, 1
+    if int(n) < 1:
+        raise argparse.ArgumentTypeError("repeat count must be at least 1: %r" % value)
+    return path, int(n)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="laya train", description="Fine-tune a Laya checkpoint on JSONL cases (RLCD).")
-    ap.add_argument("--data", required=True, help="training cases, JSONL (schema in laya/data.py)")
+    ap.add_argument("--data", required=True, action="append", type=_data_spec, metavar="FILE[:N]",
+                    help="training cases, JSONL (schema in laya/data.py); repeat to mix files, and add :N to "
+                         "repeat that file's training cases N times per epoch")
+    ap.add_argument("--calib-data", metavar="FILE",
+                    help="held-out cases for calibration and per-epoch metrics, instead of splitting --data")
     ap.add_argument("--base", required=True, help="checkpoint name (english, multilingual, ...), hub id, or directory")
     ap.add_argument("--out", required=True, help="output checkpoint directory")
     ap.add_argument("--device", help="cuda (default when present) or cpu")
@@ -469,8 +538,17 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     cfg = TrainConfig(**{f.name: getattr(args, f.name) for f in fields(TrainConfig)})
-    meta = train(args.base, read_jsonl(args.data), args.out, cfg, device=args.device, overwrite=args.overwrite,
-                 data_path=args.data, token=args.token)
+    records, repeat = [], {}
+    for path, n in args.data:
+        recs = read_jsonl(path)
+        records.extend(recs)
+        if n > 1:
+            repeat.update((r["id"], n) for r in recs)
+    paths = [p for p, _ in args.data]
+    calib = read_jsonl(args.calib_data) if args.calib_data else None
+    meta = train(args.base, records, args.out, cfg, device=args.device, overwrite=args.overwrite,
+                 data_path=paths[0] if len(paths) == 1 else paths, token=args.token, calib_records=calib,
+                 calib_path=args.calib_data, repeat=repeat or None)
     last = meta["epochs"][-1]
     cal = meta["calibration"] or {}
     print("saved %s: %d optimizer steps in %.0fs; last epoch train CE %.4f, held-out accuracy %s; "

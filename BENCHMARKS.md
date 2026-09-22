@@ -307,6 +307,56 @@ At 20 options both are less order-stable than Jev — worth fixing with more agg
 
 ---
 
+## Training on both datasets at once (fork, 2026-09-22)
+
+Each single-dataset checkpoint is strong only on its own data (td-v1 scores 0.5455 on Open-Jev
+test, oj-v1 scores 0.4215 on typed-decisions test), so mix-v1 trains on both:
+
+```bash
+laya train --data data/typed-decisions/train.jsonl:4 --data data/open-jev/train.jsonl \
+           --calibration-target label --base english --out runs/mix-v1 --max-len 1024 --head-max-len 256
+```
+
+`:4` repeats typed-decisions' 1,200 training cases four times per epoch, after the held-out
+split, lifting them from 7% to 21% of the 92,827 training items; the remaining 69,473 are
+Open-Jev's. 1,463 cases (8,339 items) were held out for calibration, 0 questions were skipped,
+and training took 6,079 seconds (101.3 minutes) on one RTX 5090 in bf16, defaults otherwise.
+
+| checkpoint | typed-decisions test | Open-Jev test | Open-Jev OOD |
+|---|---|---|---|
+| published `typed-decisions` | 0.7685 | — | — |
+| td-v1 (typed-decisions) | 0.7560 | 0.5455 | 0.6193 |
+| oj-v1 (Open-Jev) | 0.4215 | 0.9390 | 0.8274 |
+| **mix-v1 (both)** | **0.8005** | **0.9403** | **0.8310** |
+
+Mixing wins everywhere. On typed-decisions mix-v1 beats not just td-v1 (+0.0445) but the
+published checkpoint (+0.0320) and the 0.735 teacher self-agreement ceiling, while matching
+oj-v1 on Open-Jev test (+0.0013) and OOD (+0.0036). The gain is largest on the question types
+td-v1 was weakest at: typed-decisions score-type accuracy goes 0.7075 -> 0.7788, choice
+0.7350 -> 0.7667 and noul 0.8417 -> 0.8633. Open-Jev's synthetic controls transfer as general
+practice at reading a state under a typed question, even though a model trained on them alone
+answers real teacher-labelled cases at 0.42.
+
+| metric | td-v1 | oj-v1 | mix-v1 |
+|---|---|---|---|
+| typed-decisions ECE | 0.1357 | 0.3894 | 0.1876 |
+| Open-Jev test ECE | 0.1080 | 0.0122 | 0.0128 |
+| Open-Jev OOD ECE | 0.0809 | 0.1309 | 0.1354 |
+
+**One temperature map cannot serve both datasets.** mix-v1 was calibrated with
+`--calibration-target label`, the setting that fits temperatures to the answer accuracy is
+scored against, and held-out ECE still fell only 0.0231 -> 0.0178 — because 86% of the
+held-out items are Open-Jev's, whose near one-hot targets pull the temperatures towards
+confidence that typed-decisions does not earn. So typed-decisions ECE is worse than td-v1's
+(0.1876 vs 0.1357) even though accuracy is much better. Calibrate per workload: fit on the
+workload's own data with `laya train --calib-data`, or afterwards with `Agent.fit_temperatures`
+and `laya.load(..., calibration=...)`. Accuracy is unaffected — temperature scaling never moves
+an argmax.
+
+Evidence in `reports/trinity-prime-20260922/`.
+
+---
+
 ## Limits, stated plainly
 
 - **Near chance on typed-decisions zero-shot** — the 0.766 belongs to the fine-tuned checkpoint, on that benchmark's own training split.
