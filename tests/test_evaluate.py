@@ -1,5 +1,6 @@
 """peewee_decide.evaluate: metrics on a stub agent, and the eval command on the tiny checkpoint."""
 import json
+import types
 
 import pytest
 
@@ -44,6 +45,27 @@ def test_metrics_use_the_label_as_reference_and_the_noul_threshold():
     assert set(rep["by_workflow"]) == {"w1", "w2"}
     assert rep["by_workflow"]["w1"]["accuracy"] == 0.5 and rep["by_workflow"]["w2"]["accuracy"] == 1.0
     assert set(rep["latency_ms"]) == {"p50", "p95"}
+
+
+def test_latency_is_reported_per_case_and_per_question(monkeypatch):
+    from peewee_decide import evaluate as ev
+    ticks = iter([0.0, 0.010, 1.0, 1.030])                             # case A: 10 ms, 2 questions; B: 30 ms, 1
+    monkeypatch.setattr(ev, "time", types.SimpleNamespace(perf_counter=lambda: next(ticks)))
+    rep = evaluate(StubAgent(), RECORDS)
+    assert rep["latency_ms"]["p50"] == pytest.approx(20.0)
+    assert rep["latency_ms_per_question"]["p50"] == pytest.approx(17.5)  # median of 5 and 30
+    assert "per question" in ev.format_report(rep)
+
+
+def test_choice_keys_keep_their_type():
+    tier = {"type": "choice", "instructions": "Which tier?", "criteria": [1, 2]}
+    rec = {"id": "C", "state": {"id": "C"}, "questions": {"tier": tier}, "targets": {"tier": {"label": 1}}}
+
+    class IntKeyAgent:
+        def predict(self, state, questions, truncate=None):          # the runtime reports the raw keys
+            return {"answers": {"tier": {"probabilities": {1: 0.8, 2: 0.2}, "confidence": 0.8}}}
+
+    assert evaluate(IntKeyAgent(), [rec])["overall"]["accuracy"] == 1.0
 
 
 def test_load_model_for_eval_accepts_a_checkpoint_directory(tiny_base):

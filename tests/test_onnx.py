@@ -202,3 +202,18 @@ def test_providers_for_device():
     assert providers_for_device("cuda:0") == ["CUDAExecutionProvider"]
     assert providers_for_device("cpu") == ["CPUExecutionProvider"]
     assert providers_for_device(None) is None
+
+
+def test_export_onnx_command_on_a_checkpoint_directory(tiny_base, tmp_path, capsys):
+    """`peewee export-onnx DIR OUT` end to end: load, export, and the export answers like the source."""
+    from peewee_decide.__main__ import main
+    from peewee_decide.onnx_backend import OnnxAgent
+    from tests.conftest import toy_records
+    out = str(tmp_path / "export")
+    assert main(["export-onnx", tiny_base, out]) == 0
+    assert json.loads(capsys.readouterr().out)["quantized"] is False
+    rec = toy_records(1)[0]
+    ref = Agent(tiny_base, device="cpu").predict(rec["state"], rec["questions"])["answers"]
+    got = OnnxAgent(out).predict(rec["state"], rec["questions"])["answers"]
+    for qid, answer in ref.items():
+        assert got[qid]["confidence"] == pytest.approx(answer["confidence"], abs=2e-3), qid

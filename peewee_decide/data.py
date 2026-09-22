@@ -203,7 +203,7 @@ def split_cases(records: Sequence[Dict[str, Any]], fraction: float,
     if dups:
         raise ValueError("duplicate case ids: %s" % dups[:5])
     groups = sorted({_group_of(r) for r in records})
-    n = int(round(len(groups) * fraction))
+    n = int(len(groups) * fraction + 0.5)                   # half rounds up, not to even
     if fraction > 0 and len(groups) > 1:
         n = min(max(n, 1), len(groups) - 1)
     random.Random(seed).shuffle(groups)
@@ -254,9 +254,9 @@ OPEN_JEV_DEFAULT_CONFIG = "release-v2-redistributable"
 def open_jev_question(row: Dict[str, Any]) -> Dict[str, Any]:
     """One Open-Jev row's question in Peewee's question format."""
     kind, options = row["kind"], [str(o) for o in row["options"]]
-    if len(set(options)) != len(options):
-        raise ValueError("%s: duplicate option strings %s" % (row["id"], options))
     if kind == "choice":
+        if len(set(options)) != len(options):
+            raise ValueError("%s: duplicate option strings %s" % (row["id"], options))
         return {"type": "choice", "instructions": row["question"], "criteria": {o: None for o in options}}
     if kind == "score":
         return {"type": "score", "instructions": row["question"], "criteria": options}

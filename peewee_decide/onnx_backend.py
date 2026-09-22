@@ -242,7 +242,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("out_dir")
     p.add_argument("--subfolder", help="checkpoint subfolder in a bundle repo, e.g. multilingual")
     p.add_argument("--calibration", help="calibration JSON to bake into the export")
-    p.add_argument("--quantize", action="store_true", help="also write a weight-only int8 model (about 40% of the size, same answers)")
+    p.add_argument("--quantize", action="store_true", help="also write a weight-only int8 model (about 40%% of the size, same answers)")
     p.add_argument("--opset", type=int, default=17)
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")

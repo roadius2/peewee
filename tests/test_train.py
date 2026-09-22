@@ -56,6 +56,7 @@ def test_optimising_the_loss_moves_logits_towards_the_target():
     opt = torch.optim.Adam([logits], lr=0.05)
     gen = torch.Generator().manual_seed(0)
 
+    @torch.no_grad()
     def ce():
         return float(-(target * torch.log_softmax(logits.masked_fill(~mask, -1e4), -1)).sum(-1).mean())
 
@@ -124,6 +125,15 @@ def test_calibration_only_uses_the_held_out_questions_training_kept(tiny_base, t
     assert (out / "train_meta.json").exists()
     assert meta["skipped_questions"]["count"] > 0
     assert meta["calibration"] is not None
+
+
+def test_calibrate_leaves_out_skipped_questions_and_returns_none_when_nothing_is_left(tiny_base):
+    from peewee_decide.train import _calibrate
+    held = toy_records(2)
+    first = ["%s/%s" % (held[0]["id"], q) for q in held[0]["questions"]]
+    assert _calibrate(tiny_base, held, torch.device("cpu"), skipped=first)["n_records"] == 3
+    everything = first + ["%s/%s" % (held[1]["id"], q) for q in held[1]["questions"]]
+    assert _calibrate(tiny_base, held, torch.device("cpu"), skipped=everything) is None
 
 
 def test_training_lowers_the_soft_cross_entropy(tiny_base, tmp_path):
