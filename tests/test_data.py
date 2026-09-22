@@ -1,7 +1,11 @@
 """laya.data: JSONL schema, target vectors and reference answers. No weights, no network."""
 import pytest
 
-from laya.data import option_keys, read_jsonl, reference_index, target_vector, validate_record, write_jsonl
+from laya.data import (option_keys, read_jsonl, record_to_items, reference_index, split_cases, target_vector,
+                       validate_record, write_jsonl)
+from tests.conftest import FakeTokenizer
+
+TOK = FakeTokenizer()
 
 CHOICE = {"type": "choice", "instructions": "Which team?", "criteria": {"billing": "money", "tech": None, "other": None}}
 CHOICE_LIST = {"type": "choice", "instructions": "Which team?", "criteria": ["billing", "tech"]}
@@ -84,3 +88,54 @@ def test_jsonl_round_trip(tmp_path):
     write_jsonl(path, [_record(), _record(id="case-2")])
     assert [r["id"] for r in read_jsonl(path)] == ["case-1", "case-2"]
     assert read_jsonl(path)[0]["state"] == {"body": "charged twice"}
+
+
+def test_record_to_items_builds_one_item_per_question():
+    items, skipped = record_to_items(_record(), TOK, max_len=128, head_max_len=64)
+    assert skipped == []
+    by_q = {it["qid"]: it for it in items}
+    assert set(by_q) == {"team", "angry"}
+    team = by_q["team"]
+    assert team["qtype"] == 0 and team["target"] == [1.0, 0.0, 0.0] and team["label"] == 0
+    assert len(team["markers"]) == 3 and team["case"] == "case-1"
+    angry = by_q["angry"]
+    assert angry["qtype"] == 2 and angry["target"] == pytest.approx([0.3, 0.7]) and angry["label"] == 1
+
+
+def test_questions_whose_options_do_not_fit_are_skipped_and_named():
+    items, skipped = record_to_items(_record(), TOK, max_len=8, head_max_len=6)
+    assert skipped and all(s.startswith("case-1/") for s in skipped)
+    assert len(items) + len(skipped) == 2
+
+
+def test_list_states_keep_their_end_by_default():
+    from laya.common import serialize_state
+    state = ["opening " + "filler " * 60, "closing words here"]
+    toks = TOK(serialize_state(state))["input_ids"]
+    rec = _record(state=state)
+    left, _ = record_to_items(rec, TOK, max_len=48, head_max_len=24)
+    right, _ = record_to_items(rec, TOK, max_len=48, head_max_len=24, truncate="right")
+    assert toks[-1] in left[0]["ids"] and toks[0] not in left[0]["ids"]
+    assert toks[0] in right[0]["ids"] and toks[-1] not in right[0]["ids"]
+
+
+def _cases(n):
+    return [_record(id="case-%02d" % i) for i in range(n)]
+
+
+def test_split_is_by_case_deterministic_and_order_independent():
+    recs = _cases(20)
+    train, held = split_cases(recs, 0.25, seed=3)
+    assert len(held) == 5 and len(train) == 15
+    assert not {r["id"] for r in train} & {r["id"] for r in held}
+    _, held_again = split_cases(list(reversed(recs)), 0.25, seed=3)
+    assert {r["id"] for r in held_again} == {r["id"] for r in held}
+
+
+def test_split_edge_cases():
+    assert split_cases(_cases(5), 0.0, seed=0)[1] == []
+    assert len(split_cases(_cases(3), 0.01, seed=0)[1]) == 1
+    with pytest.raises(ValueError, match="duplicate case ids"):
+        split_cases(_cases(2) + _cases(1), 0.5, seed=0)
+    with pytest.raises(ValueError, match="fraction"):
+        split_cases(_cases(4), 1.0, seed=0)

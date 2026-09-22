@@ -12,14 +12,16 @@ A target holds `probabilities` (keys: choice keys, score levels "0".."k-1", or "
 a hard `label`, or both. `probabilities` is the training signal when present; `label` is the
 reference answer for accuracy when present. Option order is `laya.common.render_options` order.
 """
+import collections
 import json
-from typing import Any, Dict, List
+import random
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
 from .agent import Agent
 from .calibrate import target_from_label
-from .common import QTYPES
+from .common import QTYPES, build_sequence, render_options
 
 _TRUE = ("true", "yes", "1")
 _FALSE = ("false", "no", "0")
@@ -153,3 +155,48 @@ def write_jsonl(path: str, records) -> None:
     with open(path, "w", encoding="utf-8") as f:
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+
+def record_to_items(rec: Dict[str, Any], tok, max_len: int, head_max_len: int,
+                    truncate: Optional[str] = None) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """Tokenise every question of one case into training items for `collate_items`.
+
+    Returns `(items, skipped)`; `skipped` names "case/qid" for questions whose option markers do
+    not all fit in `max_len`/`head_max_len`. Truncation follows the runtime default (keep the start
+    of strings and dicts, the end of lists) unless `truncate` is "left" or "right".
+    """
+    state = rec["state"]
+    side = truncate or ("left" if isinstance(state, (list, tuple)) else "right")
+    items, skipped = [], []
+    for qid, qdef in rec["questions"].items():
+        q = Agent._to_internal(qdef)
+        ids, markers = build_sequence(tok, state, q, max_len, head_max_len, truncate_left=(side == "left"))
+        if len(markers) != len(render_options(q)):
+            skipped.append("%s/%s" % (rec["id"], qid))
+            continue
+        tgt = rec["targets"][qid]
+        items.append({"ids": ids, "markers": markers, "qtype": QTYPES[q["t"]], "target": target_vector(qdef, tgt),
+                      "label": reference_index(qdef, tgt), "case": rec["id"], "qid": qid})
+    return items, skipped
+
+
+def split_cases(records: Sequence[Dict[str, Any]], fraction: float,
+                seed: int = 0) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Split whole cases into `(train, held_out)`.
+
+    Deterministic for a given set of ids and seed, whatever order the records arrive in. A
+    positive fraction holds out at least one case and always leaves at least one for training.
+    """
+    if not 0.0 <= fraction < 1.0:
+        raise ValueError("held-out fraction must be in [0, 1), got %r" % (fraction,))
+    ids = [r["id"] for r in records]
+    dups = sorted(i for i, c in collections.Counter(ids).items() if c > 1)
+    if dups:
+        raise ValueError("duplicate case ids: %s" % dups[:5])
+    n = int(round(len(ids) * fraction))
+    if fraction > 0 and len(ids) > 1:
+        n = min(max(n, 1), len(ids) - 1)
+    order = sorted(ids)
+    random.Random(seed).shuffle(order)
+    held = set(order[:n])
+    return [r for r in records if r["id"] not in held], [r for r in records if r["id"] in held]
