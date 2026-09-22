@@ -231,13 +231,26 @@ def _save_checkpoint(model, tok, cfg: Dict[str, Any], out_dir: str) -> None:
     _write_json(os.path.join(out_dir, "rl_agent_config.json"), cfg)
 
 
-def _calibrate(out_dir: str, held: Sequence[Dict[str, Any]], device: torch.device) -> Optional[Dict[str, Any]]:
-    """Load the saved checkpoint back through the runtime and fit temperatures on the held-out cases."""
+def _calibrate(out_dir: str, held: Sequence[Dict[str, Any]], device: torch.device,
+               skipped: Sequence[str] = ()) -> Optional[Dict[str, Any]]:
+    """Load the saved checkpoint back through the runtime and fit temperatures on the held-out cases.
+
+    `skipped` names the "case/qid" questions `record_to_items` dropped during training (options
+    that do not fit `max_len`/`head_max_len`). Those must not be sent through the runtime, which
+    raises for exactly such a question instead of skipping it, so they are excluded here too; a
+    record left with no questions at all is dropped.
+    """
     from .agent import Agent
     from .calibrate import collect_records, fit_temperature_map
+    skip = set(skipped)
     agent = Agent(out_dir, device=str(device))
-    examples = [(r["state"], r["questions"], {qid: target_vector(qd, r["targets"][qid])
-                                              for qid, qd in r["questions"].items()}) for r in held]
+    examples = []
+    for r in held:
+        questions = {qid: qd for qid, qd in r["questions"].items() if "%s/%s" % (r["id"], qid) not in skip}
+        if not questions:
+            continue
+        targets = {qid: target_vector(qd, r["targets"][qid]) for qid, qd in questions.items()}
+        examples.append((r["state"], questions, targets))
     recs = collect_records(agent, examples, batch_size=32)
     del agent
     if not recs:
@@ -360,7 +373,7 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
     if dev.type == "cuda":
         torch.cuda.empty_cache()
 
-    calibration = _calibrate(out_dir, held, dev) if held else None
+    calibration = _calibrate(out_dir, held, dev, held_skipped) if held else None
     if calibration:
         out_cfg["temperature"] = calibration["temperature"]
         out_cfg["temperature_by_options"] = calibration["temperature_by_options"]

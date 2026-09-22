@@ -109,6 +109,23 @@ def test_train_writes_a_checkpoint_the_runtime_loads(tiny_base, tmp_path):
     assert set(agent.predict(rec["state"], rec["questions"])["answers"]) == {"sentiment", "happy", "stars"}
 
 
+def test_calibration_only_uses_the_held_out_questions_training_kept(tiny_base, tmp_path):
+    """A question record_to_items skips (options too long for head_max_len) must not reach the
+    runtime during calibration: Agent._build_items raises for exactly the questions that were
+    dropped everywhere else, so `_calibrate` has to drop them from the held-out records too."""
+    from tests.conftest import TINY_WORDS
+    recs = toy_records()
+    long_criteria = {w: "the a is or not statement" for w in TINY_WORDS}   # too long for head_max_len=64
+    for r in recs:
+        r["questions"]["toolong"] = {"type": "choice", "instructions": "pick one", "criteria": long_criteria}
+        r["targets"]["toolong"] = {"probabilities": {TINY_WORDS[0]: 1.0}}
+    out = tmp_path / "run"
+    meta = train(tiny_base, recs, str(out), TrainConfig(**dict(FAST, max_skipped_fraction=0.3)), device="cpu")
+    assert (out / "train_meta.json").exists()
+    assert meta["skipped_questions"]["count"] > 0
+    assert meta["calibration"] is not None
+
+
 def test_training_lowers_the_soft_cross_entropy(tiny_base, tmp_path):
     meta = train(tiny_base, toy_records(), str(tmp_path / "run"), TrainConfig(**dict(FAST, epochs=4)), device="cpu")
     ce = [e["train_ce"] for e in meta["epochs"]]
