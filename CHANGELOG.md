@@ -6,6 +6,14 @@ upstream v0.3.4 (`d113dca`).
 ## 0.4.0.dev0 (unreleased): after Phase 2
 
 ### Added
+- `laya train` mixes datasets and chooses what calibration fits to. `--data` repeats, and
+  `--data FILE:N` upsamples that file's training cases N times per epoch (after the held-out
+  split). `--calib-data FILE` calibrates on a given file, such as Open-Jev's official calibration
+  split, instead of holding out part of `--data`; overlapping ids or groups are rejected.
+  `--calibration-target label` fits temperatures to the reference answer instead of the teacher
+  distribution (the default, `probabilities`): fitting to the teacher raised typed-decisions'
+  hard-label ECE from 0.170 to 0.184. `train_meta.json` records every data file's hash, the
+  calibration file, and training items before and after upsampling.
 - `laya.patterns.speculative_choice`: ask a primary `choice` and every option's follow-up
   question in one forward pass, then keep only the follow-up matching the chosen option. This
   is the "speculative fan-out" pattern from browser-use's `jev-ultrafast` agent (operation +

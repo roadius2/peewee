@@ -215,3 +215,97 @@ def test_git_commit_is_read_without_a_subprocess():
         pytest.skip("not a git checkout")
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True).stdout.strip()
     assert _git_commit() == head
+
+
+def _capture_calibration_targets(monkeypatch):
+    import laya.calibrate as lc
+    seen = []
+    real = lc.fit_temperature_map
+
+    def spy(records, *args, **kwargs):
+        records = list(records)
+        seen.extend(t for _qt, _z, t, _k in records)
+        return real(records, *args, **kwargs)
+
+    monkeypatch.setattr(lc, "fit_temperature_map", spy)
+    return seen
+
+
+@pytest.mark.parametrize("target, one_hot", [("probabilities", False), ("label", True)])
+def test_calibration_target_picks_distribution_or_reference_answer(tiny_base, tmp_path, monkeypatch, target, one_hot):
+    seen = _capture_calibration_targets(monkeypatch)
+    meta = train(tiny_base, toy_records(), str(tmp_path / "run"),
+                 TrainConfig(**dict(FAST, epochs=1, calibration_target=target)), device="cpu")
+    assert seen and meta["config"]["calibration_target"] == target
+    assert all(sorted(t.tolist()) == [0.0] * (len(t) - 1) + [1.0] for t in seen) is one_hot
+
+
+def test_unknown_calibration_target_fails_before_any_work(tiny_base, tmp_path):
+    with pytest.raises(ValueError, match="calibration_target"):
+        train(tiny_base, toy_records(), str(tmp_path / "run"), TrainConfig(**dict(FAST, calibration_target="soft")),
+              device="cpu")
+    assert not (tmp_path / "run").exists()
+
+
+def test_calib_records_replace_the_held_out_split(tiny_base, tmp_path):
+    calib = toy_records(6, seed=1)
+    for r in calib:
+        r["id"] = "calib-" + r["id"]
+    meta = train(tiny_base, toy_records(), str(tmp_path / "run"), TrainConfig(**dict(FAST, epochs=1)), device="cpu",
+                 calib_records=calib)
+    assert meta["cases"] == {"train": 24, "heldout": 6}
+    assert meta["calibration"]["n_records"] == 18
+
+
+def test_calib_records_that_overlap_training_are_rejected(tiny_base, tmp_path):
+    recs = toy_records()
+    with pytest.raises(ValueError, match="case-000"):
+        train(tiny_base, recs, str(tmp_path / "run"), TrainConfig(**FAST), device="cpu", calib_records=recs[:2])
+    grouped = toy_records(4, seed=1)
+    for i, r in enumerate(grouped):
+        r["id"], r["meta"]["group"] = "calib-%d" % i, "case-001"
+    with pytest.raises(ValueError, match="case-001"):
+        train(tiny_base, recs, str(tmp_path / "run"), TrainConfig(**FAST), device="cpu", calib_records=grouped)
+
+
+def test_repeat_upsamples_training_cases_only(tiny_base, tmp_path):
+    from laya.data import split_cases
+    recs = toy_records()
+    repeat = {r["id"]: 3 for r in recs[:8]}
+    meta = train(tiny_base, recs, str(tmp_path / "run"), TrainConfig(**dict(FAST, epochs=1)), device="cpu",
+                 repeat=repeat)
+    train_recs, held = split_cases(recs, FAST["calib_fraction"], 0)
+    assert meta["items"]["train_unique"] == len(train_recs) * 3
+    assert meta["items"]["train"] == sum(3 * repeat.get(r["id"], 1) for r in train_recs)
+    assert meta["items"]["heldout"] == len(held) * 3
+
+
+def test_train_cli_mixes_files_and_takes_a_calibration_file(tiny_base, tmp_path):
+    from laya.data import write_jsonl
+    a, b, c = (str(tmp_path / n) for n in ("a.jsonl", "b.jsonl", "c.jsonl"))
+    recs = toy_records()
+    calib = toy_records(4, seed=2)
+    for r in calib:
+        r["id"] = "calib-" + r["id"]
+    write_jsonl(a, recs[:8])
+    write_jsonl(b, recs[8:])
+    write_jsonl(c, calib)
+    out = str(tmp_path / "run")
+    rc = train_main(["--data", a + ":4", "--data", b, "--calib-data", c, "--calibration-target", "label",
+                     "--base", tiny_base, "--out", out, "--device", "cpu", "--epochs", "1", "--micro-batch", "8",
+                     "--grad-accum", "1", "--no-gradient-checkpointing"])
+    meta = _read(out + "/train_meta.json")
+    assert rc == 0 and meta["data"] == [a, b] and len(meta["data_sha256"]) == 2
+    assert meta["calib_data"] == c and meta["cases"] == {"train": 24, "heldout": 4}
+    assert meta["items"] == {"train": 24 * 3 + 8 * 3 * 3, "train_unique": 72, "heldout": 12}
+    assert meta["config"]["calibration_target"] == "label"
+
+
+@pytest.mark.parametrize("argv", [["--calibration-target", "soft"], ["--data", "x.jsonl:0"]])
+def test_train_cli_rejects_bad_mix_arguments(tiny_base, tmp_path, argv):
+    from laya.data import write_jsonl
+    data = str(tmp_path / "train.jsonl")
+    write_jsonl(data, toy_records())
+    with pytest.raises(SystemExit) as e:
+        train_main(["--data", data, "--base", tiny_base, "--out", str(tmp_path / "run"), "--device", "cpu"] + argv)
+    assert e.value.code == 2
