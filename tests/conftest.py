@@ -35,3 +35,72 @@ class FakeTokenizer:
 @pytest.fixture
 def fake_tok():
     return FakeTokenizer()
+
+
+POS_WORDS = ["good", "great", "happy", "love", "fine"]
+NEG_WORDS = ["bad", "awful", "sad", "hate", "poor"]
+TINY_WORDS = sorted(set(POS_WORDS + NEG_WORDS + (
+    "review reviewer is the a positive or negative how many stars one three five star level question choice "
+    "score noul false true no yes statement does not hold holds sentiment").split()))
+
+
+@pytest.fixture(scope="session")
+def tiny_base(tmp_path_factory):
+    """A complete, loadable Laya checkpoint: tiny random BERT encoder, real word-level tokenizer.
+
+    No weights are downloaded. `laya.Agent(tiny_base, device="cpu")` loads it end to end.
+    """
+    import json
+
+    import torch
+    from safetensors.torch import save_file
+    from tokenizers import Tokenizer, models, normalizers, pre_tokenizers
+    from transformers import BertConfig, PreTrainedTokenizerFast
+
+    from laya.common import build_model
+
+    d = tmp_path_factory.mktemp("tiny-base")
+    vocab = {w: i for i, w in enumerate(["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"] + TINY_WORDS)}
+    tk = Tokenizer(models.WordLevel(vocab=vocab, unk_token="[UNK]"))
+    tk.normalizer = normalizers.Lowercase()
+    tk.pre_tokenizer = pre_tokenizers.Whitespace()
+    PreTrainedTokenizerFast(tokenizer_object=tk, unk_token="[UNK]", pad_token="[PAD]", cls_token="[CLS]",
+                            sep_token="[SEP]", mask_token="[MASK]").save_pretrained(str(d / "tokenizer"))
+    BertConfig(vocab_size=len(vocab), hidden_size=32, num_hidden_layers=1, num_attention_heads=2,
+               intermediate_size=64, max_position_embeddings=256).save_pretrained(str(d / "encoder"))
+    cfg = {"encoder": "tiny-bert", "head_layers": 1, "max_len": 128, "head_max_len": 64,
+           "act_costs": {"escalate": 0.5}, "temperature": [1.0, 1.0, 1.0], "amp_dtype": "bf16"}
+    torch.manual_seed(0)
+    model = build_model(cfg, encoder_dir=str(d / "encoder"))
+    save_file({k: v.contiguous() for k, v in model.state_dict().items()}, str(d / "model.safetensors"))
+    (d / "rl_agent_config.json").write_text(json.dumps(cfg))
+    return str(d)
+
+
+def toy_records(n: int = 24, seed: int = 0):
+    """Learnable toy cases for trainer tests: the review's words decide every answer."""
+    import random
+    rng = random.Random(seed)
+    out = []
+    for i in range(n):
+        pos = i % 2 == 0
+        words = [rng.choice(POS_WORDS if pos else NEG_WORDS) for _ in range(6)]
+        out.append({
+            "id": "case-%03d" % i,
+            "state": {"review": " ".join(words)},
+            "questions": {
+                "sentiment": {"type": "choice", "instructions": "Is the review positive or negative?",
+                              "criteria": {"positive": None, "negative": None}},
+                "happy": {"type": "noul", "instructions": "Is the reviewer happy?"},
+                "stars": {"type": "score", "instructions": "How many stars?",
+                          "criteria": ["one star", "three stars", "five stars"]},
+            },
+            "targets": {
+                "sentiment": {"probabilities": {"positive": 0.9, "negative": 0.1} if pos
+                              else {"positive": 0.1, "negative": 0.9}},
+                "happy": {"label": pos},
+                "stars": {"probabilities": [0.05, 0.15, 0.8] if pos else [0.8, 0.15, 0.05]},
+            },
+            "meta": {"workflow": "reviews"},
+        })
+    return out

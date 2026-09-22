@@ -1,0 +1,170 @@
+{
+  "n_cases": 1920,
+  "n_questions": 10356,
+  "overall": {
+    "n": 10356,
+    "accuracy": 0.5455,
+    "soft_accuracy": 0.4865,
+    "brier": 0.5481,
+    "total_variation": 0.5017,
+    "ece": 0.108,
+    "mean_confidence": 0.6415,
+    "score_mae": 0.7537,
+    "score_within_one": 0.661
+  },
+  "by_type": {
+    "choice": {
+      "n": 2408,
+      "accuracy": 0.3974,
+      "soft_accuracy": 0.3429,
+      "brier": 0.6243,
+      "total_variation": 0.6096,
+      "ece": 0.1249,
+      "mean_confidence": 0.5098
+    },
+    "score": {
+      "n": 1584,
+      "accuracy": 0.5139,
+      "soft_accuracy": 0.3799,
+      "brier": 0.6162,
+      "total_variation": 0.6152,
+      "ece": 0.1104,
+      "mean_confidence": 0.4797,
+      "score_mae": 0.7537,
+      "score_within_one": 0.661
+    },
+    "noul": {
+      "n": 6364,
+      "accuracy": 0.6094,
+      "soft_accuracy": 0.5674,
+      "brier": 0.5023,
+      "total_variation": 0.4326,
+      "ece": 0.1222,
+      "mean_confidence": 0.7315
+    }
+  },
+  "latency_ms": {
+    "p50": 36.75,
+    "p95": 126.87
+  },
+  "by_workflow": {
+    "customer-control-v1": {
+      "n": 606,
+      "accuracy": 0.6617,
+      "soft_accuracy": 0.604,
+      "brier": 0.3944,
+      "total_variation": 0.3793,
+      "ece": 0.1498,
+      "mean_confidence": 0.7232,
+      "score_mae": 0.5882,
+      "score_within_one": 0.7459
+    },
+    "painting-geometry-v1": {
+      "n": 3072,
+      "accuracy": 0.5866,
+      "soft_accuracy": 0.472,
+      "brier": 0.6319,
+      "total_variation": 0.528,
+      "ece": 0.224,
+      "mean_confidence": 0.6909,
+      "score_mae": 0.6009,
+      "score_within_one": 0.7656
+    },
+    "reasoning-control-v1": {
+      "n": 681,
+      "accuracy": 0.3847,
+      "soft_accuracy": 0.3689,
+      "brier": 0.7116,
+      "total_variation": 0.6311,
+      "ece": 0.1671,
+      "mean_confidence": 0.5519,
+      "score_mae": 0.9385,
+      "score_within_one": 0.6123
+    },
+    "snake-v1": {
+      "n": 1392,
+      "accuracy": 0.6839,
+      "soft_accuracy": 0.5593,
+      "brier": 0.4421,
+      "total_variation": 0.4216,
+      "ece": 0.0544,
+      "mean_confidence": 0.7282
+    },
+    "tic_tac_toe-v1": {
+      "n": 472,
+      "accuracy": 0.1822,
+      "soft_accuracy": 0.3143,
+      "brier": 0.4636,
+      "total_variation": 0.5045,
+      "ece": 0.2815,
+      "mean_confidence": 0.4637
+    },
+    "tile_platformer-v1": {
+      "n": 202,
+      "accuracy": 0.0149,
+      "soft_accuracy": 0.1773,
+      "brier": 0.8064,
+      "total_variation": 0.8227,
+      "ece": 0.2031,
+      "mean_confidence": 0.218
+    },
+    "trex_runner-v1": {
+      "n": 4,
+      "accuracy": 0.25,
+      "soft_accuracy": 0.2598,
+      "brier": 0.7523,
+      "total_variation": 0.7402,
+      "ece": 0.2148,
+      "mean_confidence": 0.3469
+    },
+    "vizdoom-basic-v1": {
+      "n": 858,
+      "accuracy": 0.4312,
+      "soft_accuracy": 0.3711,
+      "brier": 0.6373,
+      "total_variation": 0.6289,
+      "ece": 0.09,
+      "mean_confidence": 0.4548,
+      "score_mae": 1.1926,
+      "score_within_one": 0.3287
+    },
+    "workflow-controls-v1/agent_trace_observability": {
+      "n": 357,
+      "accuracy": 0.5658,
+      "soft_accuracy": 0.5459,
+      "brier": 0.51,
+      "total_variation": 0.4541,
+      "ece": 0.1569,
+      "mean_confidence": 0.6898
+    },
+    "workflow-controls-v1/customer_service": {
+      "n": 456,
+      "accuracy": 0.7346,
+      "soft_accuracy": 0.6404,
+      "brier": 0.3282,
+      "total_variation": 0.3596,
+      "ece": 0.1241,
+      "mean_confidence": 0.7062
+    },
+    "workflow-controls-v1/invoice_processing": {
+      "n": 930,
+      "accuracy": 0.6204,
+      "soft_accuracy": 0.546,
+      "brier": 0.4911,
+      "total_variation": 0.454,
+      "ece": 0.0906,
+      "mean_confidence": 0.6665
+    },
+    "workflow-controls-v1/security_incidents": {
+      "n": 1326,
+      "accuracy": 0.4962,
+      "soft_accuracy": 0.5237,
+      "brier": 0.5098,
+      "total_variation": 0.4763,
+      "ece": 0.1525,
+      "mean_confidence": 0.6411
+    }
+  },
+  "model": "runs/td-v1",
+  "data": "data/open-jev/test.jsonl"
+}

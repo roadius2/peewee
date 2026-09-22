@@ -196,6 +196,94 @@ this CPU; its value is the 60% smaller file. Rule of thumb: one 8-core CPU box s
 40 questions/s at sub-second latency; one RTX 5090 serves about 1,400 questions/s, roughly
 35x, with the p99 under 100 ms up to 32 concurrent clients.
 
+## Reproducing typed-decisions with `laya train` (fork, 2026-09-21)
+
+`laya train --base english --max-len 1024 --head-max-len 256` on `LocalLLaMA/typed-decisions`
+train (1,200 cases, 120 held out for calibration), one RTX 5090, bf16, defaults otherwise
+(4 epochs, effective batch 64). Both checkpoints scored by `laya eval` on the 2,000-decision test
+split, accuracy against the dataset's hard labels as in the original notebook.
+
+| checkpoint | accuracy | soft acc | Brier | ECE | choice | score | noul |
+|---|---|---|---|---|---|---|---|
+| published `typed-decisions` | 0.7685 | 0.4707 | 0.0615 | 0.2157 | 0.7367 | 0.7262 | 0.8567 |
+| `laya train` (td-v1) | 0.7560 | 0.5113 | 0.0534 | 0.1357 | 0.7350 | 0.7075 | 0.8417 |
+
+Training took 298.6 seconds (about 5.0 minutes). Held-out ECE before and after temperature fitting:
+0.1697 -> 0.1844. Temperatures are fitted to each question's teacher distribution (negative
+log-likelihood against the soft targets), not to minimise hard-label ECE. On soft-target data the
+fit tracks the teacher's spread rather than the argmax accuracy; that is why held-out ECE rose
+here, on typed-decisions' flat teacher distribution, while it fell on Open-Jev's near one-hot
+targets (0.0237 -> 0.0106, from `reports/trinity-prime-20260921/open-jev-oj-v1-train_meta.json`).
+On the full test split td-v1's overall ECE (0.1357) is well below the published checkpoint's
+(0.2157). Evidence in `reports/trinity-prime-20260921/`.
+
+The acceptance rule passed: td-v1's accuracy (0.7560) is within 0.02 of the published
+checkpoint's (0.7685), a gap of 0.0125. That gap is largest on score-type questions, where
+accuracy fell from 0.7262 to 0.7075 (choice and noul each lost less), so score-type questions
+are the most likely cause even though td-v1 improves score-type ECE from 0.2024 to 0.1512.
+The published checkpoint scored 0.7685 under this eval code versus the 0.766 the upstream
+notebook reported. The new eval code agrees with the notebook's scoring to within 0.003 (5 of
+2,000 questions), consistent with fp16 versus bf16 tie-breaking.
+
+## Training on Open-Jev (fork, 2026-09-21)
+
+`laya train --base english --max-len 1024 --head-max-len 256` on Open-Jev's
+`release-v2-redistributable` train split (CC0, pinned revision
+`c67699e13d0ae25e35b77165a4b6b079bedc8aba`), converted with `laya prepare-data open-jev`, one
+RTX 5090, bf16, defaults otherwise (oj-v1). Training used 13,048 cases (69,473 items) and held
+out 1,493 cases (9,643 items) for calibration; 0 questions were skipped. Training took 4,785.6
+seconds, about 79.8 minutes. Both oj-v1 and the earlier td-v1 (trained on typed-decisions, see
+above) were then evaluated with `laya eval` on Open-Jev test, Open-Jev OOD and typed-decisions
+test.
+
+| checkpoint | Open-Jev test acc | Open-Jev test ECE | Open-Jev OOD acc | Open-Jev OOD ECE | typed-decisions test acc | typed-decisions test ECE |
+|---|---|---|---|---|---|---|
+| oj-v1 (Open-Jev) | 0.9390 | 0.0122 | 0.8274 | 0.1309 | 0.4215 | 0.3894 |
+| td-v1 (typed-decisions) | 0.5455 | 0.1080 | 0.6193 | 0.0809 | 0.7560 | 0.1357 |
+
+oj-v1's accuracy on Open-Jev test, per source (`by_workflow`), sorted by question count:
+
+| source | n | accuracy |
+|---|---|---|
+| painting-geometry-v1 | 3072 | 1.0000 |
+| snake-v1 | 1392 | 0.8994 |
+| workflow-controls-v1/security_incidents | 1326 | 0.9910 |
+| workflow-controls-v1/invoice_processing | 930 | 0.9925 |
+| vizdoom-basic-v1 | 858 | 0.9755 |
+| reasoning-control-v1 | 681 | 0.6814 |
+| customer-control-v1 | 606 | 0.9719 |
+| tic_tac_toe-v1 | 472 | 0.5805 |
+| workflow-controls-v1/customer_service | 456 | 1.0000 |
+| workflow-controls-v1/agent_trace_observability | 357 | 0.9860 |
+| tile_platformer-v1 | 202 | 0.9406 |
+| trex_runner-v1 | 4 | 0.2500 |
+
+oj-v1 is the stronger model on Open-Jev: higher accuracy than td-v1 on both Open-Jev test
+(0.9390 vs 0.5455) and Open-Jev OOD (0.8274 vs 0.6193), and better calibrated on Open-Jev test
+(ECE 0.0122 vs 0.1080). td-v1 is better calibrated on Open-Jev OOD (ECE 0.0809 vs 0.1309)
+despite its lower accuracy there. td-v1 remains the stronger model on typed-decisions test,
+both more accurate (0.7560 vs 0.4215) and better calibrated (ECE 0.1357 vs 0.3894).
+
+Open-Jev's own synthetic versions of the four typed-decisions workflows
+(`workflow-controls-v1/security_incidents`, `invoice_processing`, `customer_service` and
+`agent_trace_observability`) score 0.9910, 0.9925, 1.0000 and 0.9860 on Open-Jev test, near
+99 to 100 percent. On the real teacher-labelled typed-decisions cases, oj-v1 only reaches
+0.4215 accuracy. The synthetic controls do not transfer to the real typed-decisions task.
+
+The weakest sources on Open-Jev test are tic_tac_toe-v1 (accuracy 0.5805, n=472) and
+reasoning-control-v1 (accuracy 0.6814, n=681). trex_runner-v1 scores lower still (0.2500) but
+has only 4 questions, too few to draw a conclusion from.
+
+Held-out cross-entropy rose in the last two training epochs, from 0.1673 in epoch 2 to 0.1907
+in epoch 3 and 0.2309 in epoch 4, while held-out accuracy kept rising every epoch: 0.9205,
+0.9289, 0.9411, 0.9428.
+
+Open-Jev's project reports its released 2B and 9B models on the same test and OOD splits, but
+scores only one-hot rows, so those published figures are not directly comparable to the numbers
+above.
+
+Evidence in `reports/trinity-prime-20260921/`.
+
 ### Calibration
 
 | | as shipped | temperature refit | 

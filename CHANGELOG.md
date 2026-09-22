@@ -15,6 +15,21 @@ upstream v0.3.4 (`d113dca`).
 ## 0.4.0.dev0 (unreleased): Phase 2, the decision service
 
 ### Added
+- **`laya train`** (`laya/train.py`): the notebook's RLCD fine-tuning loop as a tested single-GPU
+  command. Reads JSONL cases (`laya/data.py`), holds out whole cases for calibration, trains in
+  bf16 where the GPU supports it, fits per-bucket temperatures on the held-out cases, and writes a
+  checkpoint the runtime loads plus `train_meta.json`. Unlike the notebook it trains at the
+  configured `max_len` instead of preprocessing at the base's shorter length, and it never fits
+  temperatures on training data. Reproduces the published typed-decisions checkpoint on one RTX
+  5090 in 5 minutes: 0.7560 accuracy against the published checkpoint's 0.7685 under the same
+  eval code (`BENCHMARKS.md`).
+- **`laya eval`** (`laya/evaluate.py`): accuracy, soft accuracy, Brier score, ECE and latency per
+  question type and workflow for any checkpoint on JSONL cases.
+- **`laya prepare-data typed-decisions`**: writes the public typed-decisions dataset as JSONL,
+  keeping both the teacher distribution and the hard label. `pip install "laya[train]"`.
+  `laya prepare-data open-jev` does the same for the public Open-Jev dataset (CC0, pinned
+  revision), and the calibration split keeps variants of one case together. Training oj-v1 on
+  this data is written up in `BENCHMARKS.md` under "Training on Open-Jev (fork, 2026-09-21)".
 - **`laya serve`** (`laya/serving.py`): a FastAPI service around a preloaded `Router` with one
   `DynamicBatcher` per checkpoint. Requests are routed in pure Python, queued per checkpoint, and
   flushed into `Agent.predict_many` when `LAYA_MAX_BATCH` questions are waiting or

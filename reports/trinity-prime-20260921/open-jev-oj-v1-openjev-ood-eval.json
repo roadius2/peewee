@@ -1,0 +1,143 @@
+{
+  "n_cases": 1790,
+  "n_questions": 15701,
+  "overall": {
+    "n": 15701,
+    "accuracy": 0.8274,
+    "soft_accuracy": 0.8146,
+    "brier": 0.3009,
+    "total_variation": 0.1764,
+    "ece": 0.1309,
+    "mean_confidence": 0.9536,
+    "score_mae": 0.4181,
+    "score_within_one": 0.83
+  },
+  "by_type": {
+    "choice": {
+      "n": 3219,
+      "accuracy": 0.7384,
+      "soft_accuracy": 0.7176,
+      "brier": 0.3966,
+      "total_variation": 0.2432,
+      "ece": 0.1716,
+      "mean_confidence": 0.9
+    },
+    "score": {
+      "n": 2553,
+      "accuracy": 0.8108,
+      "soft_accuracy": 0.7806,
+      "brier": 0.3415,
+      "total_variation": 0.2137,
+      "ece": 0.1534,
+      "mean_confidence": 0.9248,
+      "score_mae": 0.4181,
+      "score_within_one": 0.83
+    },
+    "noul": {
+      "n": 9929,
+      "accuracy": 0.8605,
+      "soft_accuracy": 0.8548,
+      "brier": 0.2595,
+      "total_variation": 0.1452,
+      "ece": 0.1179,
+      "mean_confidence": 0.9785
+    }
+  },
+  "latency_ms": {
+    "p50": 10.77,
+    "p95": 55.21
+  },
+  "by_workflow": {
+    "customer-control-v1": {
+      "n": 600,
+      "accuracy": 0.9383,
+      "soft_accuracy": 0.8636,
+      "brier": 0.0966,
+      "total_variation": 0.1071,
+      "ece": 0.066,
+      "mean_confidence": 0.8816,
+      "score_mae": 0.1726,
+      "score_within_one": 0.9867
+    },
+    "painting-geometry-v1": {
+      "n": 6912,
+      "accuracy": 0.7399,
+      "soft_accuracy": 0.7389,
+      "brier": 0.508,
+      "total_variation": 0.2611,
+      "ece": 0.2511,
+      "mean_confidence": 0.9908,
+      "score_mae": 0.4807,
+      "score_within_one": 0.7841
+    },
+    "reasoning-control-v1": {
+      "n": 750,
+      "accuracy": 0.6253,
+      "soft_accuracy": 0.5601,
+      "brier": 0.4911,
+      "total_variation": 0.4399,
+      "ece": 0.0919,
+      "mean_confidence": 0.6744,
+      "score_mae": 0.7401,
+      "score_within_one": 0.772
+    },
+    "snake-v1": {
+      "n": 3464,
+      "accuracy": 0.8496,
+      "soft_accuracy": 0.8292,
+      "brier": 0.1925,
+      "total_variation": 0.1352,
+      "ece": 0.0695,
+      "mean_confidence": 0.9149
+    },
+    "vizdoom-basic-v1": {
+      "n": 825,
+      "accuracy": 0.9745,
+      "soft_accuracy": 0.9548,
+      "brier": 0.0444,
+      "total_variation": 0.0452,
+      "ece": 0.0159,
+      "mean_confidence": 0.9701,
+      "score_mae": 0.0005,
+      "score_within_one": 1.0
+    },
+    "workflow-controls-v1/agent_trace_observability": {
+      "n": 525,
+      "accuracy": 0.9829,
+      "soft_accuracy": 0.9815,
+      "brier": 0.0184,
+      "total_variation": 0.0185,
+      "ece": 0.0088,
+      "mean_confidence": 0.9867
+    },
+    "workflow-controls-v1/customer_service": {
+      "n": 600,
+      "accuracy": 0.9617,
+      "soft_accuracy": 0.955,
+      "brier": 0.0763,
+      "total_variation": 0.045,
+      "ece": 0.0354,
+      "mean_confidence": 0.9921
+    },
+    "workflow-controls-v1/invoice_processing": {
+      "n": 750,
+      "accuracy": 0.9893,
+      "soft_accuracy": 0.9847,
+      "brier": 0.0211,
+      "total_variation": 0.0153,
+      "ece": 0.0067,
+      "mean_confidence": 0.9952
+    },
+    "workflow-controls-v1/security_incidents": {
+      "n": 1275,
+      "accuracy": 0.9906,
+      "soft_accuracy": 0.9867,
+      "brier": 0.0102,
+      "total_variation": 0.0133,
+      "ece": 0.0058,
+      "mean_confidence": 0.9888
+    }
+  },
+  "model": "runs/oj-v1",
+  "data": "data/open-jev/ood.jsonl"
+}
