@@ -7,7 +7,6 @@ distribution with the target distribution; ECE uses each answer's `confidence`.
 """
 import argparse
 import json
-import os
 import time
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -79,13 +78,11 @@ def evaluate(agent, records: Sequence[Dict[str, Any]], truncate: Optional[str] =
 
 
 def load_model_for_eval(spec: str, device: Optional[str] = None):
-    """A checkpoint directory or a checkpoint name (english, multilingual, typed-decisions, ...)."""
+    """A checkpoint directory, a hub repo id, or a checkpoint name (english, multilingual, ...)."""
     from .agent import Agent
-    if os.path.isdir(spec):
-        return Agent(spec, device=device)
-    from .router import DEFAULT_MODELS, normalise_name
-    repo, sub = DEFAULT_MODELS[normalise_name(spec)]
-    return Agent(repo, device=device, subfolder=sub)
+    from .train import resolve_base
+    model_dir, _cfg = resolve_base(spec)
+    return Agent(model_dir, device=device)
 
 
 def format_report(rep: Dict[str, Any]) -> str:

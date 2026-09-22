@@ -79,6 +79,7 @@ def test_a_valid_record_passes():
     ({"targets": {"team": {"label": "billing"}}}, "case-1/angry: no target"),
     ({"targets": {"team": {"label": "billing"}, "angry": {"label": "true"}, "ghost": {"label": 1}}}, "case-1/ghost"),
     ({"targets": {"team": {"label": "sales"}, "angry": {"label": "true"}}}, "case-1/team"),
+    ({"meta": ["not", "a", "dict"]}, "case-1: 'meta' must be an object"),
 ])
 def test_invalid_records_name_the_case_and_question(over, message):
     with pytest.raises(ValueError, match=message):
@@ -173,6 +174,15 @@ def test_prepare_data_writes_train_and_test(tmp_path, monkeypatch):
     assert prepare_main(["typed-decisions", "--out", str(tmp_path)]) == 0
     assert [r["id"] for r in read_jsonl(str(tmp_path / "train.jsonl"))] == ["train"]
     assert [r["id"] for r in read_jsonl(str(tmp_path / "test.jsonl"))] == ["test"]
+
+
+def test_prepare_data_rejects_open_jev_options_for_typed_decisions(tmp_path, monkeypatch):
+    import laya.data as data
+    monkeypatch.setattr(data, "convert_typed_decisions",
+                        lambda split: [convert_typed_decisions_row(dict(_td_row(), id=split))])
+    with pytest.raises(SystemExit) as e:
+        prepare_main(["typed-decisions", "--out", str(tmp_path), "--config", "some-config"])
+    assert e.value.code == 2
 
 
 def _oj_rows():

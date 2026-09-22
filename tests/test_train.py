@@ -193,3 +193,13 @@ def test_train_cli(tiny_base, tmp_path):
     with pytest.raises(SystemExit) as e:
         train_main(["--help"])
     assert e.value.code == 0
+
+
+def test_train_cli_rejects_an_unknown_precision(tiny_base, tmp_path):
+    from laya.data import write_jsonl
+    data = str(tmp_path / "train.jsonl")
+    write_jsonl(data, toy_records())
+    with pytest.raises(SystemExit) as e:
+        train_main(["--data", data, "--base", tiny_base, "--out", str(tmp_path / "run"), "--device", "cpu",
+                    "--precision", "fp8"])
+    assert e.value.code == 2

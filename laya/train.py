@@ -397,14 +397,43 @@ def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optio
     return meta
 
 
+_CONFIG_HELP = {
+    "epochs": "number of passes over the training data",
+    "micro_batch": "number of items per forward/backward pass",
+    "grad_accum": "number of micro-batches accumulated before an optimizer step",
+    "lr_encoder": "learning rate for the encoder parameters",
+    "lr_head": "learning rate for the head parameters",
+    "weight_decay": "AdamW weight decay",
+    "clip": "gradient norm clip value",
+    "group_size": "number of noisy samples drawn per item for the policy gradient",
+    "sigma_start": "exploration noise standard deviation at the first epoch",
+    "sigma_end": "exploration noise standard deviation at the last epoch",
+    "w_sph": "weight of the spherical scoring term in the reward",
+    "w_rps": "weight of the ranked probability scoring term in the reward",
+    "ce_weight": "weight of the soft cross-entropy term in the loss",
+    "calib_fraction": "held-out share of cases used to fit temperatures",
+    "seed": "random seed for shuffling, noise and initialisation",
+    "max_len": "maximum input token length (default: from the base checkpoint)",
+    "head_max_len": "maximum token length reserved for the question and options",
+    "freeze_encoder": "keep the encoder weights fixed during training",
+    "gradient_checkpointing": "trade compute for memory by recomputing encoder activations",
+    "precision": "numeric precision to train in",
+    "max_skipped_fraction": "largest share of skipped questions before training aborts",
+    "log_every": "log training progress every this many optimizer steps",
+}
+
+
 def _add_config_args(ap: argparse.ArgumentParser) -> None:
     for f in fields(TrainConfig):
         flag = "--" + f.name.replace("_", "-")
+        help_ = _CONFIG_HELP.get(f.name)
         if isinstance(f.default, bool):
-            ap.add_argument(flag, action=argparse.BooleanOptionalAction, default=f.default)
+            ap.add_argument(flag, action=argparse.BooleanOptionalAction, default=f.default, help=help_)
+        elif f.name == "precision":
+            ap.add_argument(flag, type=str, default=f.default, choices=_PRECISIONS, help=help_)
         else:
             typ = int if f.name in _OPTIONAL_INT_FIELDS else type(f.default)
-            ap.add_argument(flag, type=typ, default=f.default)
+            ap.add_argument(flag, type=typ, default=f.default, help=help_)
 
 
 def main(argv=None) -> int:

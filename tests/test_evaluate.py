@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from laya.evaluate import evaluate, main as eval_main
+from laya.evaluate import evaluate, load_model_for_eval, main as eval_main
 from tests.conftest import toy_records
 
 CHOICE = {"type": "choice", "instructions": "Which team?", "criteria": {"a": None, "b": None, "c": None}}
@@ -44,6 +44,28 @@ def test_metrics_use_the_label_as_reference_and_the_noul_threshold():
     assert set(rep["by_workflow"]) == {"w1", "w2"}
     assert rep["by_workflow"]["w1"]["accuracy"] == 0.5 and rep["by_workflow"]["w2"]["accuracy"] == 1.0
     assert set(rep["latency_ms"]) == {"p50", "p95"}
+
+
+def test_load_model_for_eval_accepts_a_checkpoint_directory(tiny_base):
+    from laya.agent import Agent
+    agent = load_model_for_eval(tiny_base, device="cpu")
+    assert isinstance(agent, Agent)
+
+
+def test_load_model_for_eval_routes_a_hub_repo_id_through_resolve_base(tiny_base, monkeypatch):
+    import laya.train as lt
+    calls = []
+
+    def fake_resolve_base(base, token=None):
+        calls.append(base)
+        from laya.agent import resolve_checkpoint
+        return resolve_checkpoint(tiny_base)
+
+    monkeypatch.setattr(lt, "resolve_base", fake_resolve_base)
+    from laya.agent import Agent
+    agent = load_model_for_eval("convaiinnovations/laya-typed-decisions", device="cpu")
+    assert isinstance(agent, Agent)
+    assert calls == ["convaiinnovations/laya-typed-decisions"]
 
 
 def test_eval_command_on_the_tiny_checkpoint(tiny_base, tmp_path, capsys):

@@ -3,7 +3,7 @@ import sys
 
 USAGE = """usage: laya serve [--host H] [--port P] [--models a,b] [--device D]
        laya export-onnx <checkpoint> <out_dir> [--quantize]
-       laya prepare-data typed-decisions --out DIR
+       laya prepare-data typed-decisions|open-jev --out DIR [--config NAME]
        laya train --data FILE --base NAME|DIR --out DIR [options; see laya train --help]
        laya eval NAME|DIR --data FILE [--device D] [--out report.json]"""
 

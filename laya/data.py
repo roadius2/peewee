@@ -116,6 +116,8 @@ def validate_record(rec: Dict[str, Any]) -> None:
         raise ValueError("%s: 'questions' must be a non-empty object" % rid)
     if not isinstance(ts, dict):
         raise ValueError("%s: 'targets' must be an object" % rid)
+    if "meta" in rec and not isinstance(rec["meta"], dict):
+        raise ValueError("%s: 'meta' must be an object" % rid)
     for qid in ts:
         if qid not in qs:
             raise ValueError("%s/%s: target for a question that does not exist" % (rid, qid))
@@ -298,9 +300,17 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="laya prepare-data", description="Write a public dataset as laya training JSONL.")
     ap.add_argument("dataset", choices=["typed-decisions", "open-jev"])
     ap.add_argument("--out", required=True, help="output directory")
-    ap.add_argument("--config", default=OPEN_JEV_DEFAULT_CONFIG, help="open-jev only: dataset config")
-    ap.add_argument("--revision", default=OPEN_JEV_REVISION, help="open-jev only: pinned dataset revision")
+    ap.add_argument("--config", default=None, help="open-jev only: dataset config")
+    ap.add_argument("--revision", default=None, help="open-jev only: pinned dataset revision")
     args = ap.parse_args(argv)
+    if args.dataset == "typed-decisions":
+        if args.config is not None or args.revision is not None:
+            ap.error("--config and --revision only apply to open-jev")
+    else:
+        if args.config is None:
+            args.config = OPEN_JEV_DEFAULT_CONFIG
+        if args.revision is None:
+            args.revision = OPEN_JEV_REVISION
     os.makedirs(args.out, exist_ok=True)
     if args.dataset == "typed-decisions":
         for split in ("train", "test"):
