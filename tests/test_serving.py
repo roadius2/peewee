@@ -188,6 +188,25 @@ def test_settings_from_env():
     assert Settings(calibration="/one.json").calibration_for("anything") == "/one.json"
 
 
+def test_serve_command_hands_its_flags_to_the_app_as_peewee_env(monkeypatch):
+    """uvicorn builds the app in its own call to `create_app`, which reads only the environment."""
+    import os
+    import sys
+    import types
+
+    from peewee_decide import serving
+    runs = []
+    monkeypatch.setitem(sys.modules, "uvicorn", types.SimpleNamespace(run=lambda *a, **k: runs.append((a, k))))
+    monkeypatch.setattr(os, "environ", {"PEEWEE_MAX_BATCH": "8"})
+    serving.main(["--models", "english,typed", "--device", "cpu", "--host", "127.0.0.1", "--port", "9001"])
+    (args, kwargs), = runs
+    assert args == ("peewee_decide.serving:create_app",) and kwargs["factory"] is True
+    assert (kwargs["host"], kwargs["port"]) == ("127.0.0.1", 9001)
+    s = Settings.from_env()
+    assert s.models == ["english", "typed"] and s.device == "cpu" and s.max_batch == 8
+    assert (s.host, s.port) == ("127.0.0.1", 9001)
+
+
 # ------------------------------------------------------------------ HTTP
 @pytest.fixture
 def client(stub_router):

@@ -144,6 +144,10 @@ def test_split_edge_cases():
         split_cases(_cases(4), 1.0, seed=0)
 
 
+def test_split_rounds_a_half_group_up():
+    assert len(split_cases(_cases(5), 0.5, seed=0)[1]) == 3        # 2.5 groups -> 3, not banker's 2
+
+
 def _td_row():
     return {"id": 7, "workflow": "customer_service", "split": "test", "label_agreement": 0.8,
             "state": json.dumps({"ticket": "refund please"}),
@@ -224,6 +228,12 @@ def test_open_jev_rows_group_into_one_case_per_state():
 def test_bad_open_jev_rows_raise(change, message):
     with pytest.raises(ValueError, match=message):
         convert_open_jev_rows([dict(_oj_rows()[0], **change)])
+
+
+def test_open_jev_score_levels_may_repeat():
+    row = dict(_oj_rows()[2], options=["ok", "ok", "bad"])       # score levels are positional, not keyed
+    (rec,) = convert_open_jev_rows([row])
+    assert rec["questions"]["g1:sev"]["criteria"] == ["ok", "ok", "bad"]
 
 
 def test_split_keeps_a_group_together():

@@ -18,7 +18,20 @@ upstream v0.3.4 (`d113dca`).
   someone else's artefacts. Upstream's Laya brand assets were removed from `assets/`; the upstream
   notebook and the full commit history stay. Attribution is in `NOTICE` and the README footnote.
 
+### Fixed
+- `peewee export-onnx --help` crashed: the `--quantize` help text had an unescaped `%`.
+- `peewee eval` failed on choice questions whose criteria list non-string keys (`[1, 2]`): it looked
+  the answers up by stringified key, while the runtime reports the keys as given.
+- `peewee prepare-data open-jev` rejected score questions with repeated level texts; only choice
+  options need to be distinct.
+- The held-out split rounds half a group up (`round(2.5)` used to give 2). A split whose size lands
+  exactly on .5 now holds out one more group than before.
+
 ### Added
+- `peewee eval` reports `latency_ms_per_question` next to `latency_ms` (which stays per case).
+- Tests for the renamed surface end to end: the installed `peewee` console script and
+  `python -m peewee_decide`, every subcommand's `--help`, `peewee serve` handing its flags to the app
+  as `PEEWEE_*` variables, and `peewee export-onnx` on a checkpoint directory answering like the source.
 - Mixed-dataset training is the best recipe measured so far: typed-decisions upsampled 4x plus
   Open-Jev (mix-v1) scores 0.8005 on typed-decisions test — above the published checkpoint's
   0.7685 — while matching the Open-Jev specialist on Open-Jev test (0.9403) and OOD (0.8310).
