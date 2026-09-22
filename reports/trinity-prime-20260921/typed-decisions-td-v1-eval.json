@@ -1,0 +1,98 @@
+{
+  "n_cases": 400,
+  "n_questions": 2000,
+  "overall": {
+    "n": 2000,
+    "accuracy": 0.756,
+    "soft_accuracy": 0.5113,
+    "brier": 0.0534,
+    "total_variation": 0.1448,
+    "ece": 0.1357,
+    "mean_confidence": 0.6275,
+    "score_mae": 0.2286,
+    "score_within_one": 0.9912
+  },
+  "by_type": {
+    "choice": {
+      "n": 600,
+      "accuracy": 0.735,
+      "soft_accuracy": 0.4649,
+      "brier": 0.068,
+      "total_variation": 0.174,
+      "ece": 0.1468,
+      "mean_confidence": 0.6
+    },
+    "score": {
+      "n": 800,
+      "accuracy": 0.7075,
+      "soft_accuracy": 0.4309,
+      "brier": 0.0559,
+      "total_variation": 0.1601,
+      "ece": 0.1512,
+      "mean_confidence": 0.5653,
+      "score_mae": 0.2286,
+      "score_within_one": 0.9912
+    },
+    "noul": {
+      "n": 600,
+      "accuracy": 0.8417,
+      "soft_accuracy": 0.665,
+      "brier": 0.0357,
+      "total_variation": 0.0951,
+      "ece": 0.1135,
+      "mean_confidence": 0.7378
+    }
+  },
+  "latency_ms": {
+    "p50": 17.34,
+    "p95": 22.37
+  },
+  "by_workflow": {
+    "agent_trace_observability": {
+      "n": 500,
+      "accuracy": 0.736,
+      "soft_accuracy": 0.4497,
+      "brier": 0.0489,
+      "total_variation": 0.1456,
+      "ece": 0.1657,
+      "mean_confidence": 0.5751,
+      "score_mae": 0.1932,
+      "score_within_one": 1.0
+    },
+    "customer_service": {
+      "n": 500,
+      "accuracy": 0.766,
+      "soft_accuracy": 0.518,
+      "brier": 0.0681,
+      "total_variation": 0.1673,
+      "ece": 0.1286,
+      "mean_confidence": 0.6386,
+      "score_mae": 0.2128,
+      "score_within_one": 0.995
+    },
+    "invoice_processing": {
+      "n": 500,
+      "accuracy": 0.782,
+      "soft_accuracy": 0.6278,
+      "brier": 0.0531,
+      "total_variation": 0.1296,
+      "ece": 0.0886,
+      "mean_confidence": 0.7229,
+      "score_mae": 0.2559,
+      "score_within_one": 0.98
+    },
+    "security_incidents": {
+      "n": 500,
+      "accuracy": 0.74,
+      "soft_accuracy": 0.4497,
+      "brier": 0.0436,
+      "total_variation": 0.1364,
+      "ece": 0.1693,
+      "mean_confidence": 0.5732,
+      "score_mae": 0.2526,
+      "score_within_one": 0.99
+    }
+  },
+  "model": "runs/td-v1",
+  "data": "data/typed-decisions/test.jsonl"
+}

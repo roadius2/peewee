@@ -20,7 +20,9 @@ upstream v0.3.4 (`d113dca`).
   bf16 where the GPU supports it, fits per-bucket temperatures on the held-out cases, and writes a
   checkpoint the runtime loads plus `train_meta.json`. Unlike the notebook it trains at the
   configured `max_len` instead of preprocessing at the base's shorter length, and it never fits
-  temperatures on training data.
+  temperatures on training data. Reproduces the published typed-decisions checkpoint on one RTX
+  5090 in 5 minutes: 0.7560 accuracy against the published checkpoint's 0.7685 under the same
+  eval code (`BENCHMARKS.md`).
 - **`laya eval`** (`laya/evaluate.py`): accuracy, soft accuracy, Brier score, ECE and latency per
   question type and workflow for any checkpoint on JSONL cases.
 - **`laya prepare-data typed-decisions`**: writes the public typed-decisions dataset as JSONL,

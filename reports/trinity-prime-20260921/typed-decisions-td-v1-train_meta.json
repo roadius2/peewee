@@ -1,0 +1,111 @@
+{
+  "base": "english",
+  "data": "data/typed-decisions/train.jsonl",
+  "data_sha256": "10115689dd2960fafef22a2968e62e6bbefa49f85704dfd8f718bdaa4aca2946",
+  "config": {
+    "epochs": 4,
+    "micro_batch": 16,
+    "grad_accum": 4,
+    "lr_encoder": 2.5e-05,
+    "lr_head": 0.0001,
+    "weight_decay": 0.01,
+    "clip": 1.0,
+    "group_size": 4,
+    "sigma_start": 0.4,
+    "sigma_end": 0.1,
+    "w_sph": 0.75,
+    "w_rps": 1.0,
+    "ce_weight": 1.0,
+    "calib_fraction": 0.1,
+    "seed": 0,
+    "max_len": 1024,
+    "head_max_len": 256,
+    "freeze_encoder": false,
+    "gradient_checkpointing": true,
+    "precision": "auto",
+    "max_skipped_fraction": 0.05,
+    "log_every": 20
+  },
+  "device": "cuda",
+  "precision": "bf16",
+  "max_len": 1024,
+  "head_max_len": 256,
+  "cases": {
+    "train": 1080,
+    "heldout": 120
+  },
+  "items": {
+    "train": 5400,
+    "heldout": 600
+  },
+  "skipped_questions": {
+    "count": 0,
+    "first": []
+  },
+  "optimizer_steps": 340,
+  "epochs": [
+    {
+      "epoch": 1,
+      "sigma": 0.4,
+      "train_loss": 0.78135967818943,
+      "train_ce": 0.9966402669277417,
+      "train_reward": -0.5890103063639804,
+      "heldout_ce": 0.9075042263666788,
+      "heldout_accuracy": 0.7033333333333334
+    },
+    {
+      "epoch": 2,
+      "sigma": 0.30000000000000004,
+      "train_loss": 0.6643518302038577,
+      "train_ce": 0.875237747585985,
+      "train_reward": -0.3911909955228574,
+      "heldout_ce": 0.8414387687047322,
+      "heldout_accuracy": 0.7866666666666666
+    },
+    {
+      "epoch": 3,
+      "sigma": 0.2,
+      "train_loss": 0.6233491909927165,
+      "train_ce": 0.8305577939078652,
+      "train_reward": -0.3130866720412786,
+      "heldout_ce": 0.8210996890068054,
+      "heldout_accuracy": 0.8033333333333333
+    },
+    {
+      "epoch": 4,
+      "sigma": 0.09999999999999998,
+      "train_loss": 0.693749413687802,
+      "train_ce": 0.8094907514089663,
+      "train_reward": -0.27487713795640234,
+      "heldout_ce": 0.8186418120066324,
+      "heldout_accuracy": 0.8216666666666667
+    }
+  ],
+  "calibration": {
+    "temperature": [
+      1.0606883764266968,
+      1.07718026638031,
+      1.1055835485458374
+    ],
+    "temperature_by_options": {
+      "choice:3-5": 1.0606883764266968,
+      "noul:2": 1.1055835485458374,
+      "score:3-5": 1.07718026638031
+    },
+    "n_by_bucket": {
+      "choice:3-5": 177,
+      "noul:2": 183,
+      "score:3-5": 240
+    },
+    "n_records": 600,
+    "heldout_ece_before": 0.16968632283946444,
+    "heldout_ece_after": 0.18443901380530045
+  },
+  "git_commit": "be6e3c3a8629ab6077a7a6536a2995eb77fe2030",
+  "versions": {
+    "torch": "2.11.0+cu128",
+    "transformers": "5.17.0",
+    "laya": "0.4.0.dev0"
+  },
+  "wall_seconds": 298.6
+}
