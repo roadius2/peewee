@@ -1,0 +1,376 @@
+{
+  "n_cases": 1920,
+  "excluded_cases": [],
+  "peewee": {
+    "n_cases": 1920,
+    "n_questions": 10356,
+    "overall": {
+      "n": 10356,
+      "accuracy": 0.94,
+      "soft_accuracy": 0.9282,
+      "brier": 0.0589,
+      "total_variation": 0.0569,
+      "ece": 0.0126,
+      "mean_confidence": 0.9471,
+      "score_mae": 0.0758,
+      "score_within_one": 0.9716
+    },
+    "by_type": {
+      "choice": {
+        "n": 2408,
+        "accuracy": 0.8393,
+        "soft_accuracy": 0.8011,
+        "brier": 0.1235,
+        "total_variation": 0.1391,
+        "ece": 0.025,
+        "mean_confidence": 0.8349
+      },
+      "score": {
+        "n": 1584,
+        "accuracy": 0.9444,
+        "soft_accuracy": 0.9396,
+        "brier": 0.0702,
+        "total_variation": 0.0537,
+        "ece": 0.0215,
+        "mean_confidence": 0.9639,
+        "score_mae": 0.0758,
+        "score_within_one": 0.9716
+      },
+      "noul": {
+        "n": 6364,
+        "accuracy": 0.9771,
+        "soft_accuracy": 0.9734,
+        "brier": 0.0317,
+        "total_variation": 0.0266,
+        "ece": 0.0095,
+        "mean_confidence": 0.9854
+      }
+    },
+    "latency_ms": {
+      "p50": 132.67,
+      "p95": 1566.2
+    },
+    "by_workflow": {
+      "customer-control-v1": {
+        "n": 606,
+        "accuracy": 0.9719,
+        "soft_accuracy": 0.9714,
+        "brier": 0.0003,
+        "total_variation": 0.0032,
+        "ece": 0.007,
+        "mean_confidence": 0.9737,
+        "score_mae": 0.0024,
+        "score_within_one": 1.0
+      },
+      "painting-geometry-v1": {
+        "n": 3072,
+        "accuracy": 0.9964,
+        "soft_accuracy": 0.9964,
+        "brier": 0.0061,
+        "total_variation": 0.0036,
+        "ece": 0.0031,
+        "mean_confidence": 0.9994,
+        "score_mae": 0.0,
+        "score_within_one": 1.0
+      },
+      "reasoning-control-v1": {
+        "n": 681,
+        "accuracy": 0.6887,
+        "soft_accuracy": 0.6703,
+        "brier": 0.4144,
+        "total_variation": 0.3297,
+        "ece": 0.1158,
+        "mean_confidence": 0.8045,
+        "score_mae": 0.526,
+        "score_within_one": 0.8018
+      },
+      "snake-v1": {
+        "n": 1392,
+        "accuracy": 0.898,
+        "soft_accuracy": 0.8805,
+        "brier": 0.0873,
+        "total_variation": 0.0841,
+        "ece": 0.0232,
+        "mean_confidence": 0.9164
+      },
+      "tic_tac_toe-v1": {
+        "n": 472,
+        "accuracy": 0.5403,
+        "soft_accuracy": 0.3792,
+        "brier": 0.3337,
+        "total_variation": 0.4305,
+        "ece": 0.1038,
+        "mean_confidence": 0.4507
+      },
+      "tile_platformer-v1": {
+        "n": 202,
+        "accuracy": 0.9901,
+        "soft_accuracy": 0.9872,
+        "brier": 0.0135,
+        "total_variation": 0.0128,
+        "ece": 0.0079,
+        "mean_confidence": 0.9929
+      },
+      "trex_runner-v1": {
+        "n": 4,
+        "accuracy": 0.75,
+        "soft_accuracy": 0.635,
+        "brier": 0.3228,
+        "total_variation": 0.365,
+        "ece": 0.3268,
+        "mean_confidence": 0.6729
+      },
+      "vizdoom-basic-v1": {
+        "n": 858,
+        "accuracy": 0.9848,
+        "soft_accuracy": 0.9789,
+        "brier": 0.0212,
+        "total_variation": 0.0211,
+        "ece": 0.0072,
+        "mean_confidence": 0.9857,
+        "score_mae": 0.0,
+        "score_within_one": 1.0
+      },
+      "workflow-controls-v1/agent_trace_observability": {
+        "n": 357,
+        "accuracy": 0.9944,
+        "soft_accuracy": 0.9915,
+        "brier": 0.0103,
+        "total_variation": 0.0085,
+        "ece": 0.003,
+        "mean_confidence": 0.9964
+      },
+      "workflow-controls-v1/customer_service": {
+        "n": 456,
+        "accuracy": 1.0,
+        "soft_accuracy": 0.9991,
+        "brier": 0.0,
+        "total_variation": 0.0009,
+        "ece": 0.0009,
+        "mean_confidence": 0.9991
+      },
+      "workflow-controls-v1/invoice_processing": {
+        "n": 930,
+        "accuracy": 1.0,
+        "soft_accuracy": 0.9988,
+        "brier": 0.0001,
+        "total_variation": 0.0012,
+        "ece": 0.0012,
+        "mean_confidence": 0.9988
+      },
+      "workflow-controls-v1/security_incidents": {
+        "n": 1326,
+        "accuracy": 0.997,
+        "soft_accuracy": 0.9964,
+        "brier": 0.003,
+        "total_variation": 0.0036,
+        "ece": 0.0036,
+        "mean_confidence": 0.9976
+      }
+    },
+    "latency_ms_per_question": {
+      "p50": 50.84,
+      "p95": 121.86
+    },
+    "latency_ms_sequential": {
+      "p50": 132.67,
+      "p95": 1566.2,
+      "n": 1920
+    },
+    "model": [
+      "runs/mix-v1"
+    ],
+    "input_tokens": 2833699,
+    "truncated_cases": 0
+  },
+  "jev": {
+    "n_cases": 1920,
+    "n_questions": 10356,
+    "overall": {
+      "n": 10356,
+      "accuracy": 0.8104,
+      "soft_accuracy": 0.7355,
+      "brier": 0.2398,
+      "total_variation": 0.2519,
+      "ece": 0.0216,
+      "mean_confidence": 0.7998,
+      "score_mae": 0.3036,
+      "score_within_one": 0.9375
+    },
+    "by_type": {
+      "choice": {
+        "n": 2408,
+        "accuracy": 0.637,
+        "soft_accuracy": 0.605,
+        "brier": 0.3708,
+        "total_variation": 0.3412,
+        "ece": 0.0985,
+        "mean_confidence": 0.7196
+      },
+      "score": {
+        "n": 1584,
+        "accuracy": 0.8321,
+        "soft_accuracy": 0.7547,
+        "brier": 0.2254,
+        "total_variation": 0.2443,
+        "ece": 0.0456,
+        "mean_confidence": 0.8021,
+        "score_mae": 0.3036,
+        "score_within_one": 0.9375
+      },
+      "noul": {
+        "n": 6364,
+        "accuracy": 0.8705,
+        "soft_accuracy": 0.7801,
+        "brier": 0.1939,
+        "total_variation": 0.2199,
+        "ece": 0.046,
+        "mean_confidence": 0.8296
+      }
+    },
+    "latency_ms": {
+      "p50": 279.97,
+      "p95": 362.65
+    },
+    "by_workflow": {
+      "customer-control-v1": {
+        "n": 606,
+        "accuracy": 0.8284,
+        "soft_accuracy": 0.8256,
+        "brier": 0.191,
+        "total_variation": 0.168,
+        "ece": 0.0833,
+        "mean_confidence": 0.9117,
+        "score_mae": 0.3981,
+        "score_within_one": 0.8119
+      },
+      "painting-geometry-v1": {
+        "n": 3072,
+        "accuracy": 0.901,
+        "soft_accuracy": 0.8207,
+        "brier": 0.1603,
+        "total_variation": 0.1793,
+        "ece": 0.052,
+        "mean_confidence": 0.8565,
+        "score_mae": 0.3659,
+        "score_within_one": 0.974
+      },
+      "reasoning-control-v1": {
+        "n": 681,
+        "accuracy": 0.8576,
+        "soft_accuracy": 0.8072,
+        "brier": 0.2131,
+        "total_variation": 0.1928,
+        "ece": 0.0348,
+        "mean_confidence": 0.8811,
+        "score_mae": 0.2504,
+        "score_within_one": 0.9339
+      },
+      "snake-v1": {
+        "n": 1392,
+        "accuracy": 0.6904,
+        "soft_accuracy": 0.5744,
+        "brier": 0.3827,
+        "total_variation": 0.4,
+        "ece": 0.0358,
+        "mean_confidence": 0.6814
+      },
+      "tic_tac_toe-v1": {
+        "n": 472,
+        "accuracy": 0.4301,
+        "soft_accuracy": 0.3345,
+        "brier": 0.4015,
+        "total_variation": 0.4709,
+        "ece": 0.0643,
+        "mean_confidence": 0.4108
+      },
+      "tile_platformer-v1": {
+        "n": 202,
+        "accuracy": 0.1782,
+        "soft_accuracy": 0.1771,
+        "brier": 0.841,
+        "total_variation": 0.8229,
+        "ece": 0.1211,
+        "mean_confidence": 0.2603
+      },
+      "trex_runner-v1": {
+        "n": 4,
+        "accuracy": 0.5,
+        "soft_accuracy": 0.3925,
+        "brier": 0.6434,
+        "total_variation": 0.6075,
+        "ece": 0.4675,
+        "mean_confidence": 0.5875
+      },
+      "vizdoom-basic-v1": {
+        "n": 858,
+        "accuracy": 0.6795,
+        "soft_accuracy": 0.6157,
+        "brier": 0.4722,
+        "total_variation": 0.3843,
+        "ece": 0.1548,
+        "mean_confidence": 0.7922,
+        "score_mae": 0.0786,
+        "score_within_one": 0.9755
+      },
+      "workflow-controls-v1/agent_trace_observability": {
+        "n": 357,
+        "accuracy": 0.7479,
+        "soft_accuracy": 0.6734,
+        "brier": 0.3455,
+        "total_variation": 0.3266,
+        "ece": 0.0931,
+        "mean_confidence": 0.7783
+      },
+      "workflow-controls-v1/customer_service": {
+        "n": 456,
+        "accuracy": 0.9057,
+        "soft_accuracy": 0.8439,
+        "brier": 0.1274,
+        "total_variation": 0.1561,
+        "ece": 0.0736,
+        "mean_confidence": 0.8761
+      },
+      "workflow-controls-v1/invoice_processing": {
+        "n": 930,
+        "accuracy": 0.9172,
+        "soft_accuracy": 0.8491,
+        "brier": 0.1076,
+        "total_variation": 0.1509,
+        "ece": 0.0687,
+        "mean_confidence": 0.8706
+      },
+      "workflow-controls-v1/security_incidents": {
+        "n": 1326,
+        "accuracy": 0.9201,
+        "soft_accuracy": 0.835,
+        "brier": 0.1125,
+        "total_variation": 0.165,
+        "ece": 0.0881,
+        "mean_confidence": 0.8561
+      }
+    },
+    "latency_ms_per_question": {
+      "p50": 92.95,
+      "p95": 304.04
+    },
+    "latency_ms_sequential": {
+      "p50": 284.86,
+      "p95": 353.1,
+      "n": 200
+    },
+    "model": [
+      "jev-1.13.0"
+    ],
+    "input_tokens": 1892796
+  },
+  "agreement": {
+    "overall": 0.8030127462340672,
+    "by_type": {
+      "choice": 0.6229235880398671,
+      "noul": 0.8689503456945318,
+      "score": 0.8118686868686869
+    }
+  },
+  "data": "data/open-jev/test.jsonl"
+}

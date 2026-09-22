@@ -28,6 +28,13 @@ upstream v0.3.4 (`d113dca`).
   exactly on .5 now holds out one more group than before.
 
 ### Added
+- `scripts/jev_compare.py` benchmarks Peewee against TypeSafe's Jev on the same cases and scores
+  both with `peewee eval`'s scorer. It runs Jev over the API (resumable, and splits cases over the
+  request limit), runs a Peewee checkpoint, and reports accuracy, ECE, Brier, agreement, latency and
+  tokens. The first measured results (mix-v1 against Jev 1.13.0, on an RTX 5090 and an M5 Max)
+  are in `reports/jev-vs-peewee-20260922/` and `BENCHMARKS.md`. The README's Jev figures are now
+  measured rather than published. On the same cases Jev is the better-calibrated system, which
+  replaces the earlier published-figure comparison that said the opposite.
 - `peewee eval` reports `latency_ms_per_question` next to `latency_ms` (which stays per case).
 - Tests for the renamed surface end to end: the installed `peewee` console script and
   `python -m peewee_decide`, every subcommand's `--help`, `peewee serve` handing its flags to the app

@@ -1,6 +1,6 @@
 # Peewee benchmarks
 
-Every checkpoint answered **byte-identical questions** in each run (fixed seed). Jev figures are **third-party published, never measured here** — no TypeSafe API access — so sample sizes and prompts differ; treat them as indicative.
+Every checkpoint answered **byte-identical questions** in each run (fixed seed). Jev figures in the older sections are **third-party published**, so their sample sizes and prompts differ; treat them as indicative. [Measured against Jev](#measured-against-jev-fork-2026-09-22) has Jev 1.13.0 measured by us over its API, on the same cases as Peewee and scored the same way.
 
 | run | what | where |
 |---|---|---|
@@ -356,6 +356,71 @@ an argmax.
 Evidence in `reports/trinity-prime-20260922/`.
 
 ---
+
+## Measured against Jev (fork, 2026-09-22)
+
+Jev 1.13.0 and Peewee mix-v1 answered the same 4,110 cases (28,057 questions). `peewee eval`'s
+scorer graded both, using `scripts/jev_compare.py`. Method, caveats and raw reports are in
+`reports/jev-vs-peewee-20260922/`. Jev's answers are used only for this comparison, never for
+training or calibration.
+
+| accuracy | typed-decisions | Open-Jev test | Open-Jev OOD |
+|---|---|---|---|
+| **Peewee mix-v1** | **0.8005** | **0.9403** | **0.8310** |
+| Jev 1.13.0 (measured) | 0.7385 | 0.8104 | 0.8031 |
+| — choice (Peewee / Jev) | 0.767 / 0.737 | 0.841 / 0.637 | 0.750 / 0.750 |
+| — score | 0.779 / 0.696 | 0.944 / 0.832 | 0.839 / 0.647 |
+| — noul | 0.863 / 0.797 | 0.977 / 0.871 | 0.855 / 0.860 |
+| ECE (Peewee / Jev) | 0.188 / **0.045** | **0.013** / 0.022 | 0.135 / **0.049** |
+| mean confidence (Peewee / Jev) | 0.613 / 0.756 | 0.947 / 0.800 | 0.966 / 0.771 |
+| same answer | 74.3% | 80.4% | 71.6% |
+
+**Wins and losses:**
+
+- **Accuracy:** Peewee is ahead on all three splits. Two of them (typed-decisions and Open-Jev
+  test) come from the data it was trained on, so OOD is the fairest comparison. There, Peewee
+  leads 0.831 to 0.803, and nearly all of that lead is on score questions (0.839 against 0.647).
+  Choice and noul are even.
+- **Calibration:** Jev is better calibrated on typed-decisions and on OOD.
+  - On OOD, mix-v1 is overconfident: 0.966 mean confidence against 0.831 accuracy.
+  - On typed-decisions, it is underconfident, with the temperatures fitted mostly on Open-Jev
+    (see [Training on both datasets at once](#training-on-both-datasets-at-once-fork-2026-09-22)).
+  - The ECE figures published earlier (Peewee 0.081, Jev 0.144) came from different samples and
+    prompts. On the same cases, Jev is the better-calibrated system except on Open-Jev test.
+- **Latency:** Jev took 280–286 ms per case at p50 over HTTPS, the same whether its first 200 cases
+  were sent one at a time or 5 at a time. Peewee took 10–17 ms per case in-process on the RTX 5090.
+- **Cost:** 4.50M Jev input tokens, about $0.19.
+
+### Apple silicon (M5 Max, 2026-09-22)
+
+On a MacBook Pro with an M5 Max (18 cores, 128 GB), mix-v1 runs on MPS in fp32. On the same cases
+it matches the RTX 5090's accuracy to within 0.001, and 0.3% of answers differ (bf16 against fp32).
+
+| | typed-decisions | Open-Jev test | Open-Jev OOD |
+|---|---|---|---|
+| p50 per case, M5 Max (MPS) | 299 ms | 133 ms | 156 ms |
+| p50 per case, RTX 5090 | 17 ms | 10 ms | 11 ms |
+
+Worst case, with 1,024-token states:
+
+- **M5 Max, MPS:** about 3–5 questions per second at any batch size, using 6.7 GB of unified
+  memory at a batch of 32.
+- **M5 Max, CPU:** about 1 question per second.
+- **Speed-up measured but not enabled:** bf16 autocast on MPS roughly doubles throughput (184 → 110
+  ms per real case, 3.0 → 6.1 questions/s) and moves confidences by at most 0.025. fp16 autocast
+  and half-precision weights crash inside Metal Performance Shaders.
+
+The same worst case on the RTX 5090, as GPU memory for the whole process:
+
+| questions per pass | memory |
+|---|---|
+| model loaded, idle | 2.2 GB |
+| 1 | 3.1 GB |
+| 32 (`PEEWEE_MAX_BATCH`) | 5.1 GB |
+| 64 | 7.8 GB |
+
+Each additional loaded checkpoint adds about 1.6 GB. The weights stay in fp32 on the GPU and only
+the compute runs in bf16.
 
 ## Limits, stated plainly
 
