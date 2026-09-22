@@ -302,7 +302,12 @@ The original plan, kept for reference:
 - **Chunk-and-aggregate** fallback for genuinely long inputs: score each chunk, combine with
   a learned or fixed rule (max for risk questions, last-chunk-weighted for state questions).
 
-### Phase 4: per-workload classifiers — training CLI done (`laya train`, `laya eval`, `laya prepare-data`); teacher labelling and the gating harness are next
+### Phase 4: per-workload classifiers — training CLI done (`laya train`, `laya eval`, `laya prepare-data`), and mixing datasets beats training on either alone (2026-09-22); teacher labelling and the gating harness are next
+- Mixing typed-decisions (upsampled 4x) with Open-Jev gave the best checkpoint on every split: 0.8005 on
+  typed-decisions test against the published checkpoint's 0.7685, while matching the Open-Jev specialist on
+  Open-Jev test and OOD. Calibration does not mix the same way — one temperature map fitted on a combined
+  held-out set follows the larger dataset — so fit temperatures per workload (`--calib-data`, or
+  `Agent.fit_temperatures` after training). `BENCHMARKS.md`, "Training on both datasets at once".
 - `laya/train.py`: the RLCD loop lifted out of the notebook into a CLI (`laya train
   --data ... --base multilingual --epochs 4`), with the dataset schema documented (JSONL of
   `{state, questions, targets}`).

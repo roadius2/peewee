@@ -6,6 +6,10 @@ upstream v0.3.4 (`d113dca`).
 ## 0.4.0.dev0 (unreleased): after Phase 2
 
 ### Added
+- Mixed-dataset training is the best recipe measured so far: typed-decisions upsampled 4x plus
+  Open-Jev (mix-v1) scores 0.8005 on typed-decisions test — above the published checkpoint's
+  0.7685 — while matching the Open-Jev specialist on Open-Jev test (0.9403) and OOD (0.8310).
+  Evidence in `reports/trinity-prime-20260922/`, write-up in `BENCHMARKS.md`.
 - `laya train` mixes datasets and chooses what calibration fits to. `--data` repeats, and
   `--data FILE:N` upsamples that file's training cases N times per epoch (after the held-out
   split). `--calib-data FILE` calibrates on a given file, such as Open-Jev's official calibration
