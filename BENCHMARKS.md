@@ -209,16 +209,21 @@ split, accuracy against the dataset's hard labels as in the original notebook.
 | `laya train` (td-v1) | 0.7560 | 0.5113 | 0.0534 | 0.1357 | 0.7350 | 0.7075 | 0.8417 |
 
 Training took 298.6 seconds (about 5.0 minutes). Held-out ECE before and after temperature fitting:
-0.1697 -> 0.1844, a slight worsening on this small held-out set; on the full test split td-v1's
-overall ECE (0.1357) is well below the published checkpoint's (0.2157). Evidence in
-`reports/trinity-prime-20260921/`.
+0.1697 -> 0.1844. Temperatures are fitted to each question's teacher distribution (negative
+log-likelihood against the soft targets), not to minimise hard-label ECE. On soft-target data the
+fit tracks the teacher's spread rather than the argmax accuracy; that is why held-out ECE rose
+here, on typed-decisions' flat teacher distribution, while it fell on Open-Jev's near one-hot
+targets (0.0237 -> 0.0106, from `reports/trinity-prime-20260921/open-jev-oj-v1-train_meta.json`).
+On the full test split td-v1's overall ECE (0.1357) is well below the published checkpoint's
+(0.2157). Evidence in `reports/trinity-prime-20260921/`.
 
 The acceptance rule passed: td-v1's accuracy (0.7560) is within 0.02 of the published
 checkpoint's (0.7685), a gap of 0.0125. That gap is largest on score-type questions, where
 accuracy fell from 0.7262 to 0.7075 (choice and noul each lost less), so score-type questions
 are the most likely cause even though td-v1 improves score-type ECE from 0.2024 to 0.1512.
 The published checkpoint scored 0.7685 under this eval code versus the 0.766 the upstream
-notebook reported, which shows the new eval code reproduces the notebook's scoring.
+notebook reported. The new eval code agrees with the notebook's scoring to within 0.003 (5 of
+2,000 questions), consistent with fp16 versus bf16 tie-breaking.
 
 ## Training on Open-Jev (fork, 2026-09-21)
 
