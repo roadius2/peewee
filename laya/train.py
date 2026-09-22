@@ -13,7 +13,6 @@ import logging
 import math
 import os
 import random
-import subprocess
 import time
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
@@ -212,11 +211,33 @@ def _sha256(path: str) -> str:
 
 
 def _git_commit() -> Optional[str]:
+    """HEAD of the source checkout `laya` runs from, read from `.git` directly (the package never shells out)."""
     try:
-        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)),
-                              capture_output=True, text=True, timeout=5, check=True).stdout.strip()
-    except Exception:
-        return None
+        git = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".git")
+        if os.path.isfile(git):                                 # worktree: ".git" names the real git dir
+            with open(git) as f:
+                git = os.path.join(os.path.dirname(git), f.read().split("gitdir:", 1)[1].strip())
+        with open(os.path.join(git, "HEAD")) as f:
+            head = f.read().strip()
+        if not head.startswith("ref:"):
+            return head
+        ref = head[4:].strip()
+        common = git
+        if os.path.isfile(os.path.join(git, "commondir")):     # worktrees keep branch refs in the main git dir
+            with open(os.path.join(git, "commondir")) as f:
+                common = os.path.join(git, f.read().strip())
+        for d in (git, common):
+            if os.path.isfile(os.path.join(d, ref)):
+                with open(os.path.join(d, ref)) as f:
+                    return f.read().strip()
+        with open(os.path.join(common, "packed-refs")) as f:
+            for line in f:
+                sha, _, name = line.strip().partition(" ")
+                if name == ref:
+                    return sha
+    except (OSError, IndexError):
+        pass
+    return None
 
 
 def _save_checkpoint(model, tok, cfg: Dict[str, Any], out_dir: str) -> None:

@@ -203,3 +203,15 @@ def test_train_cli_rejects_an_unknown_precision(tiny_base, tmp_path):
         train_main(["--data", data, "--base", tiny_base, "--out", str(tmp_path / "run"), "--device", "cpu",
                     "--precision", "fp8"])
     assert e.value.code == 2
+
+
+def test_git_commit_is_read_without_a_subprocess():
+    import os
+    import subprocess
+
+    from laya.train import _git_commit
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if not os.path.exists(os.path.join(root, ".git")):
+        pytest.skip("not a git checkout")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True).stdout.strip()
+    assert _git_commit() == head
