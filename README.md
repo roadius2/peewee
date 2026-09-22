@@ -532,6 +532,23 @@ policy gradient), fit calibration temperatures, evaluate, and push the result to
 
 * **[`notebooks/laya_finetune_typed_decisions_2xT4_kaggle.ipynb`](notebooks/laya_finetune_typed_decisions_2xT4_kaggle.ipynb)**
 
+### From the command line
+
+The same objective runs as a library command on one GPU, reading cases from JSONL (the schema
+is documented at the top of `laya/data.py`):
+
+```bash
+pip install -e ".[train]"
+laya prepare-data typed-decisions --out data/typed-decisions
+laya train --data data/typed-decisions/train.jsonl --base english --out runs/td-v1 \
+           --max-len 1024 --head-max-len 256
+laya eval runs/td-v1 --data data/typed-decisions/test.jsonl
+```
+
+`laya train` holds out a tenth of the cases, fits calibration temperatures on them, and writes a
+checkpoint that `laya.Agent` loads directly, plus `train_meta.json` with the settings, data hash
+and per-epoch metrics. `laya train --help` lists every setting.
+
 Fine-tuning is where most of the value is. On the typed-decisions benchmark the base
 checkpoints score near chance zero-shot (0.36 and 0.35 against a 0.318 random baseline),
 while the fine-tuned checkpoint reaches **0.766** on the same 2,000 decisions -- above

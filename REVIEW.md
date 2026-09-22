@@ -302,7 +302,7 @@ The original plan, kept for reference:
 - **Chunk-and-aggregate** fallback for genuinely long inputs: score each chunk, combine with
   a learned or fixed rule (max for risk questions, last-chunk-weighted for state questions).
 
-### Phase 4: per-workload classifiers
+### Phase 4: per-workload classifiers — training CLI done (`laya train`, `laya eval`, `laya prepare-data`); teacher labelling and the gating harness are next
 - `laya/train.py`: the RLCD loop lifted out of the notebook into a CLI (`laya train
   --data ... --base multilingual --epochs 4`), with the dataset schema documented (JSONL of
   `{state, questions, targets}`).
