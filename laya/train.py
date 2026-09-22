@@ -5,12 +5,25 @@ a Gaussian policy gradient over the option logits whose reward is a strictly pro
 against the target distribution (`laya.common.proper_reward`), with a group-relative (GRPO)
 baseline, plus soft cross-entropy.
 """
+import argparse
+import contextlib
+import hashlib
+import json
 import logging
-from typing import Dict, Optional, Tuple
+import math
+import os
+import random
+import subprocess
+import time
+from dataclasses import asdict, dataclass, fields
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
+import numpy as np
 import torch
 
-from .common import proper_reward
+from .agent import _tokenizer_dir, resolve_checkpoint
+from .common import build_model, collate_items, proper_reward
+from .data import read_jsonl, record_to_items, split_cases, target_vector, validate_record
 
 logger = logging.getLogger("laya.train")
 
@@ -46,3 +59,359 @@ def rlcd_loss(logits: torch.Tensor, mask: torch.Tensor, target: torch.Tensor, qt
     loss_ce = -(target * torch.log_softmax(logits.masked_fill(~mask, -1e4), -1)).sum(-1).mean()
     loss = loss_rl + ce_weight * loss_ce
     return loss, {"reward": float(r.mean()), "ce": float(loss_ce.detach()), "rl": float(loss_rl.detach())}
+
+
+@dataclass
+class TrainConfig:
+    """Hyperparameters. Defaults reproduce the notebook on one GPU (effective batch 64 = 16 x 4)."""
+    epochs: int = 4
+    micro_batch: int = 16
+    grad_accum: int = 4
+    lr_encoder: float = 2.5e-5
+    lr_head: float = 1e-4
+    weight_decay: float = 0.01
+    clip: float = 1.0
+    group_size: int = 4
+    sigma_start: float = 0.4
+    sigma_end: float = 0.1
+    w_sph: float = 0.75
+    w_rps: float = 1.0
+    ce_weight: float = 1.0
+    calib_fraction: float = 0.1
+    seed: int = 0
+    max_len: Optional[int] = None
+    head_max_len: Optional[int] = None
+    freeze_encoder: bool = False
+    gradient_checkpointing: bool = True
+    precision: str = "auto"
+    max_skipped_fraction: float = 0.05
+    log_every: int = 20
+
+
+_PRECISIONS = ("auto", "bf16", "fp16", "fp32")
+_OPTIONAL_INT_FIELDS = ("max_len", "head_max_len")
+
+
+def pick_device(device: Optional[str]) -> torch.device:
+    """`None` means CUDA when present, else CPU. Asking for CUDA without it is an error, never a CPU run."""
+    if device is None:
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    d = torch.device(device)
+    if d.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but not available; refusing to train on CPU")
+    return d
+
+
+def _precision(name: str, device: torch.device) -> Tuple[Optional[torch.dtype], bool]:
+    """(autocast dtype or None, use a GradScaler)."""
+    if name not in _PRECISIONS:
+        raise ValueError("precision must be one of %s, got %r" % (_PRECISIONS, name))
+    if device.type != "cuda" or name == "fp32":
+        return None, False
+    if name == "auto":
+        name = "bf16" if torch.cuda.is_bf16_supported() else "fp16"
+    return (torch.bfloat16, False) if name == "bf16" else (torch.float16, True)
+
+
+def _autocast(device: torch.device, dtype: Optional[torch.dtype]):
+    if dtype is None:
+        return contextlib.nullcontext()
+    return torch.autocast(device_type=device.type, dtype=dtype)
+
+
+def _seed_everything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def resolve_base(base: str, token: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
+    """A local checkpoint directory, a checkpoint name (`english`, `multilingual`, ...), or a hub repo id."""
+    if os.path.isdir(base):
+        return resolve_checkpoint(base)
+    if "/" in base:
+        return resolve_checkpoint(base, token=token)
+    from .router import DEFAULT_MODELS, normalise_name
+    repo, sub = DEFAULT_MODELS[normalise_name(base)]
+    return resolve_checkpoint(repo, token=token, subfolder=sub)
+
+
+def _load_model(model_dir: str, cfg: Dict[str, Any]):
+    from safetensors.torch import load_file
+    enc_dir = os.path.join(model_dir, "encoder")
+    model = build_model(cfg, encoder_dir=enc_dir if os.path.isdir(enc_dir) else None)
+    weights = load_file(os.path.join(model_dir, "model.safetensors"))
+    model.load_state_dict({k: (v.float() if v.is_floating_point() else v) for k, v in weights.items()}, strict=True)
+    try:
+        model.encoder.config.reference_compile = False     # keep ModernBERT on the eager path
+    except Exception:
+        pass
+    return model.float()
+
+
+def _load_tokenizer(model_dir: str, cfg: Dict[str, Any]):
+    from transformers import AutoTokenizer
+    tok_dir = _tokenizer_dir(model_dir)
+    return AutoTokenizer.from_pretrained(tok_dir if tok_dir else cfg["encoder"])
+
+
+def _items(records: Sequence[Dict[str, Any]], tok, max_len: int, head_max_len: int):
+    items, skipped = [], []
+    for r in records:
+        its, sk = record_to_items(r, tok, max_len, head_max_len)
+        items.extend(its)
+        skipped.extend(sk)
+    return items, skipped
+
+
+def _chunks(items: List[Dict[str, Any]], size: int) -> Iterator[List[Dict[str, Any]]]:
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+
+def _to_device(batch: Dict[str, Any], device: torch.device) -> Dict[str, Any]:
+    return {k: (v.to(device) if torch.is_tensor(v) else v) for k, v in batch.items()}
+
+
+def _forward(model, b: Dict[str, Any], detach_encoder: bool = False) -> torch.Tensor:
+    logits, _act = model(b["input_ids"], b["attention_mask"], b["marker_pos"], b["marker_mask"], b["qtype"],
+                         detach_encoder=detach_encoder)
+    return logits.float()
+
+
+@torch.no_grad()
+def _heldout_metrics(model, items, pad_id, device, amp, micro_batch) -> Dict[str, float]:
+    if not items:
+        return {}
+    model.eval()
+    ce, correct = 0.0, 0
+    for chunk in _chunks(items, micro_batch):
+        b = _to_device(collate_items([chunk], pad_id), device)
+        with _autocast(device, amp):
+            logits = _forward(model, b)
+        logits = logits.float().masked_fill(~b["marker_mask"], -1e4)
+        ce += float(-(b["target"] * torch.log_softmax(logits, -1)).sum(-1).sum())
+        correct += int((logits.argmax(-1) == b["label"]).sum())
+    model.train()
+    return {"heldout_ce": ce / len(items), "heldout_accuracy": correct / len(items)}
+
+
+def _write_json(path: str, obj: Any) -> None:
+    with open(path, "w") as f:
+        json.dump(obj, f, indent=2, default=str)
+
+
+def _sha256(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _git_commit() -> Optional[str]:
+    try:
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)),
+                              capture_output=True, text=True, timeout=5, check=True).stdout.strip()
+    except Exception:
+        return None
+
+
+def _save_checkpoint(model, tok, cfg: Dict[str, Any], out_dir: str) -> None:
+    """Exactly what `laya.Agent` loads: fp16 safetensors, encoder config, tokenizer, rl_agent_config.json."""
+    from safetensors.torch import save_file
+    os.makedirs(out_dir, exist_ok=True)
+    sd = {k: (v.detach().half() if v.is_floating_point() else v.detach()).contiguous().cpu()
+          for k, v in model.state_dict().items()}
+    save_file(sd, os.path.join(out_dir, "model.safetensors"))
+    model.encoder.config.save_pretrained(os.path.join(out_dir, "encoder"))
+    tok.save_pretrained(os.path.join(out_dir, "tokenizer"))
+    _write_json(os.path.join(out_dir, "rl_agent_config.json"), cfg)
+
+
+def _calibrate(out_dir: str, held: Sequence[Dict[str, Any]], device: torch.device) -> Optional[Dict[str, Any]]:
+    """Load the saved checkpoint back through the runtime and fit temperatures on the held-out cases."""
+    from .agent import Agent
+    from .calibrate import collect_records, fit_temperature_map
+    agent = Agent(out_dir, device=str(device))
+    examples = [(r["state"], r["questions"], {qid: target_vector(qd, r["targets"][qid])
+                                              for qid, qd in r["questions"].items()}) for r in held]
+    recs = collect_records(agent, examples, batch_size=32)
+    del agent
+    if not recs:
+        return None
+    fit = fit_temperature_map(recs)
+    rep = fit["report"]["all"]
+    return {"temperature": [float(x) for x in fit["temperature"]],
+            "temperature_by_options": {k: float(v) for k, v in fit["temperature_by_options"].items()},
+            "n_by_bucket": fit["n_by_bucket"], "n_records": len(recs),
+            "heldout_ece_before": rep["before"]["ece"], "heldout_ece_after": rep["after"]["ece"]}
+
+
+def train(base: str, records: Sequence[Dict[str, Any]], out_dir: str, cfg: Optional[TrainConfig] = None,
+          device: Optional[str] = None, overwrite: bool = False, data_path: Optional[str] = None,
+          token: Optional[str] = None) -> Dict[str, Any]:
+    """Fine-tune `base` on `records`, calibrate on held-out cases, save to `out_dir`, return the run metadata."""
+    import transformers
+
+    import laya
+    cfg = cfg or TrainConfig()
+    t_start = time.time()
+    if not overwrite and any(os.path.exists(os.path.join(out_dir, n)) for n in ("model.safetensors",
+                                                                                   "rl_agent_config.json")):
+        raise FileExistsError("%s already holds a checkpoint; pass overwrite=True (--overwrite) to replace it" % out_dir)
+    for r in records:
+        validate_record(r)
+    dev = pick_device(device)
+    amp, use_scaler = _precision(cfg.precision, dev)
+    _seed_everything(cfg.seed)
+
+    model_dir, base_cfg = resolve_base(base, token=token)
+    tok = _load_tokenizer(model_dir, base_cfg)
+    max_len = cfg.max_len or int(base_cfg.get("max_len", 512))
+    head_max_len = cfg.head_max_len or int(base_cfg.get("head_max_len", 192))
+
+    train_recs, held = split_cases(records, cfg.calib_fraction, cfg.seed)
+    items, skipped = _items(train_recs, tok, max_len, head_max_len)
+    held_items, held_skipped = _items(held, tok, max_len, head_max_len)
+    all_skipped = skipped + held_skipped
+    n_questions = sum(len(r["questions"]) for r in records)
+    if n_questions and len(all_skipped) / n_questions > cfg.max_skipped_fraction:
+        raise ValueError("%d of %d questions do not fit max_len=%d / head_max_len=%d (first: %s); raise the lengths "
+                         "or shorten the options" % (len(all_skipped), n_questions, max_len, head_max_len,
+                                                     all_skipped[:3]))
+    if not items:
+        raise ValueError("no training items")
+    if all_skipped:
+        logger.warning("laya.train: skipped %d questions whose options do not fit (first: %s)",
+                       len(all_skipped), all_skipped[:3])
+
+    model = _load_model(model_dir, base_cfg).to(dev)
+    model.train()
+    if cfg.freeze_encoder:
+        for p in model.encoder.parameters():
+            p.requires_grad_(False)
+    elif cfg.gradient_checkpointing:
+        model.encoder.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+    enc_ids = {id(p) for p in model.encoder.parameters()}
+    enc_params = [p for p in model.encoder.parameters() if p.requires_grad]
+    head_params = [p for p in model.parameters() if id(p) not in enc_ids]
+    groups = [{"params": head_params, "lr": cfg.lr_head}]
+    if enc_params:
+        groups.insert(0, {"params": enc_params, "lr": cfg.lr_encoder})
+    trainable = [p for g in groups for p in g["params"]]
+    opt = torch.optim.AdamW(groups, weight_decay=cfg.weight_decay)
+    steps_per_epoch = math.ceil(len(items) / (cfg.micro_batch * cfg.grad_accum))
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(1, steps_per_epoch * cfg.epochs), eta_min=1e-6)
+    scaler = torch.amp.GradScaler("cuda", enabled=use_scaler)
+    gen = torch.Generator(device=dev).manual_seed(cfg.seed)
+    pad_id = tok.pad_token_id
+    logger.info("laya.train: %d train items from %d cases, %d held-out cases, max_len %d, %s on %s",
+                len(items), len(train_recs), len(held), max_len, amp or "fp32", dev)
+
+    epochs_log: List[Dict[str, Any]] = []
+    step = 0
+    for epoch in range(cfg.epochs):
+        sigma = sigma_for_epoch(epoch, cfg.epochs, cfg.sigma_start, cfg.sigma_end)
+        order = list(items)
+        random.Random(cfg.seed + epoch).shuffle(order)
+        chunks = list(_chunks(order, cfg.micro_batch))
+        sums = {"loss": 0.0, "reward": 0.0, "ce": 0.0}
+        opt.zero_grad(set_to_none=True)
+        for i, chunk in enumerate(chunks):
+            b = _to_device(collate_items([chunk], pad_id), dev)
+            with _autocast(dev, amp):
+                logits = _forward(model, b, detach_encoder=cfg.freeze_encoder)
+            loss, st = rlcd_loss(logits.float(), b["marker_mask"], b["target"], b["qtype"], sigma, cfg.group_size,
+                                 gen, cfg.w_sph, cfg.w_rps, cfg.ce_weight)
+            if not torch.isfinite(loss):
+                raise RuntimeError("non-finite loss at epoch %d, micro-batch %d; nothing was saved" % (epoch + 1, i + 1))
+            scaler.scale(loss / cfg.grad_accum).backward()
+            sums["loss"] += float(loss.detach())
+            sums["reward"] += st["reward"]
+            sums["ce"] += st["ce"]
+            if (i + 1) % cfg.grad_accum == 0 or i + 1 == len(chunks):
+                scaler.unscale_(opt)
+                torch.nn.utils.clip_grad_norm_(trainable, cfg.clip)
+                scaler.step(opt)
+                scaler.update()
+                opt.zero_grad(set_to_none=True)
+                sched.step()
+                step += 1
+                if step % cfg.log_every == 0:
+                    logger.info("laya.train: epoch %d step %d loss %.4f reward %.4f lr %.2e", epoch + 1, step,
+                                float(loss.detach()), st["reward"], sched.get_last_lr()[0])
+        n = len(chunks)
+        rec = {"epoch": epoch + 1, "sigma": sigma, "train_loss": sums["loss"] / n, "train_ce": sums["ce"] / n,
+               "train_reward": sums["reward"] / n}
+        rec.update(_heldout_metrics(model, held_items, pad_id, dev, amp, cfg.micro_batch))
+        epochs_log.append(rec)
+        logger.info("laya.train: epoch %d done: %s", epoch + 1, json.dumps(rec))
+
+    if cfg.gradient_checkpointing and not cfg.freeze_encoder:
+        model.encoder.gradient_checkpointing_disable()
+    out_cfg = dict(base_cfg)
+    out_cfg.update({"max_len": max_len, "head_max_len": head_max_len, "fine_tuned": True,
+                    "temperature": [1.0, 1.0, 1.0], "temperature_by_options": {}})
+    _save_checkpoint(model, tok, out_cfg, out_dir)
+    del model, opt, sched, scaler
+    if dev.type == "cuda":
+        torch.cuda.empty_cache()
+
+    calibration = _calibrate(out_dir, held, dev) if held else None
+    if calibration:
+        out_cfg["temperature"] = calibration["temperature"]
+        out_cfg["temperature_by_options"] = calibration["temperature_by_options"]
+        _write_json(os.path.join(out_dir, "rl_agent_config.json"), out_cfg)
+    else:
+        logger.warning("laya.train: no held-out questions; temperatures left at 1.0")
+
+    meta = {"base": base, "data": data_path, "data_sha256": _sha256(data_path) if data_path else None,
+            "config": asdict(cfg), "device": str(dev),
+            "precision": {None: "fp32", torch.bfloat16: "bf16", torch.float16: "fp16"}[amp],
+            "max_len": max_len, "head_max_len": head_max_len,
+            "cases": {"train": len(train_recs), "heldout": len(held)},
+            "items": {"train": len(items), "heldout": len(held_items)},
+            "skipped_questions": {"count": len(all_skipped), "first": all_skipped[:50]},
+            "optimizer_steps": step, "epochs": epochs_log, "calibration": calibration,
+            "git_commit": _git_commit(),
+            "versions": {"torch": torch.__version__, "transformers": transformers.__version__,
+                         "laya": laya.__version__},
+            "wall_seconds": round(time.time() - t_start, 1)}
+    _write_json(os.path.join(out_dir, "train_meta.json"), meta)
+    return meta
+
+
+def _add_config_args(ap: argparse.ArgumentParser) -> None:
+    for f in fields(TrainConfig):
+        flag = "--" + f.name.replace("_", "-")
+        if isinstance(f.default, bool):
+            ap.add_argument(flag, action=argparse.BooleanOptionalAction, default=f.default)
+        else:
+            typ = int if f.name in _OPTIONAL_INT_FIELDS else type(f.default)
+            ap.add_argument(flag, type=typ, default=f.default)
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="laya train", description="Fine-tune a Laya checkpoint on JSONL cases (RLCD).")
+    ap.add_argument("--data", required=True, help="training cases, JSONL (schema in laya/data.py)")
+    ap.add_argument("--base", required=True, help="checkpoint name (english, multilingual, ...), hub id, or directory")
+    ap.add_argument("--out", required=True, help="output checkpoint directory")
+    ap.add_argument("--device", help="cuda (default when present) or cpu")
+    ap.add_argument("--overwrite", action="store_true", help="replace a checkpoint already in --out")
+    ap.add_argument("--token", help="hub token for private bases (default: HF_TOKEN)")
+    _add_config_args(ap)
+    args = ap.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    cfg = TrainConfig(**{f.name: getattr(args, f.name) for f in fields(TrainConfig)})
+    meta = train(args.base, read_jsonl(args.data), args.out, cfg, device=args.device, overwrite=args.overwrite,
+                 data_path=args.data, token=args.token)
+    last = meta["epochs"][-1]
+    cal = meta["calibration"] or {}
+    print("saved %s: %d optimizer steps in %.0fs; last epoch train CE %.4f, held-out accuracy %s; "
+          "held-out ECE %s -> %s" % (args.out, meta["optimizer_steps"], meta["wall_seconds"], last["train_ce"],
+                                     last.get("heldout_accuracy", "n/a"), cal.get("heldout_ece_before", "n/a"),
+                                     cal.get("heldout_ece_after", "n/a")))
+    return 0

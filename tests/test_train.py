@@ -4,7 +4,8 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from laya.common import QTYPES, proper_reward  # noqa: E402
-from laya.train import rlcd_loss, sigma_for_epoch  # noqa: E402
+from laya.train import TrainConfig, main as train_main, pick_device, rlcd_loss, sigma_for_epoch, train  # noqa: E402
+from tests.conftest import toy_records  # noqa: E402
 
 
 def _batch():
@@ -72,3 +73,106 @@ def test_sigma_anneals_per_epoch():
     assert sigma_for_epoch(1, 4, 0.4, 0.1) == pytest.approx(0.3)
     assert sigma_for_epoch(3, 4, 0.4, 0.1) == pytest.approx(0.1)
     assert sigma_for_epoch(0, 1, 0.4, 0.1) == pytest.approx(0.4)
+
+
+FAST = dict(epochs=2, micro_batch=8, grad_accum=1, lr_encoder=1e-3, lr_head=1e-2, gradient_checkpointing=False,
+            calib_fraction=0.25, log_every=1)
+
+
+def _read(path):
+    import json
+    with open(path) as f:
+        return json.load(f)
+
+
+def test_train_writes_a_checkpoint_the_runtime_loads(tiny_base, tmp_path):
+    from safetensors import safe_open
+
+    from laya.agent import Agent
+    out = tmp_path / "run"
+    meta = train(tiny_base, toy_records(), str(out), TrainConfig(**FAST), device="cpu")
+    for name in ("model.safetensors", "rl_agent_config.json", "encoder/config.json", "tokenizer/tokenizer.json",
+                 "train_meta.json"):
+        assert (out / name).exists(), name
+    cfg = _read(str(out / "rl_agent_config.json"))
+    assert cfg["fine_tuned"] is True and cfg["max_len"] == 128 and cfg["head_max_len"] == 64
+    assert cfg["amp_dtype"] == "bf16"
+    assert len(cfg["temperature"]) == 3 and isinstance(cfg["temperature_by_options"], dict)
+    assert meta["cases"] == {"train": 18, "heldout": 6} and meta["skipped_questions"]["count"] == 0
+    assert meta["calibration"]["n_records"] == 18 and len(meta["epochs"]) == 2
+    assert _read(str(out / "train_meta.json"))["optimizer_steps"] == meta["optimizer_steps"] > 0
+    with safe_open(str(out / "model.safetensors"), "pt") as f:
+        floats = {f.get_tensor(k).dtype for k in f.keys() if f.get_tensor(k).is_floating_point()}
+    assert floats == {torch.float16}
+    agent = Agent(str(out), device="cpu")
+    rec = toy_records()[0]
+    assert set(agent.predict(rec["state"], rec["questions"])["answers"]) == {"sentiment", "happy", "stars"}
+
+
+def test_training_lowers_the_soft_cross_entropy(tiny_base, tmp_path):
+    meta = train(tiny_base, toy_records(), str(tmp_path / "run"), TrainConfig(**dict(FAST, epochs=4)), device="cpu")
+    ce = [e["train_ce"] for e in meta["epochs"]]
+    assert ce[-1] < ce[0]
+
+
+def test_freeze_encoder_leaves_the_encoder_untouched(tiny_base, tmp_path):
+    from safetensors.torch import load_file
+    train(tiny_base, toy_records(), str(tmp_path / "run"), TrainConfig(**dict(FAST, freeze_encoder=True)),
+          device="cpu")
+    before = load_file(tiny_base + "/model.safetensors")
+    after = load_file(str(tmp_path / "run" / "model.safetensors"))
+    enc = [k for k in before if k.startswith("encoder.")]
+    assert enc and all(torch.equal(before[k].half(), after[k]) for k in enc)
+    assert any(not torch.equal(before[k].half(), after[k]) for k in before if k.startswith("scorer."))
+
+
+def test_an_existing_checkpoint_is_not_overwritten(tiny_base, tmp_path):
+    (tmp_path / "rl_agent_config.json").write_text("{}")
+    with pytest.raises(FileExistsError, match="overwrite"):
+        train(tiny_base, toy_records(), str(tmp_path), TrainConfig(**FAST), device="cpu")
+
+
+def test_too_many_skipped_questions_abort(tiny_base, tmp_path):
+    with pytest.raises(ValueError, match="do not fit"):
+        train(tiny_base, toy_records(), str(tmp_path / "run"), TrainConfig(**dict(FAST, max_len=10, head_max_len=8)),
+              device="cpu")
+
+
+def test_invalid_records_fail_before_any_work(tiny_base, tmp_path):
+    recs = toy_records()
+    recs[3]["targets"]["stars"] = {"label": 9}
+    with pytest.raises(ValueError, match="case-003/stars"):
+        train(tiny_base, recs, str(tmp_path / "run"), TrainConfig(**FAST), device="cpu")
+    assert not (tmp_path / "run").exists()
+
+
+def test_non_finite_loss_aborts_without_saving(tiny_base, tmp_path, monkeypatch):
+    import laya.train as lt
+
+    def nan_loss(*args, **kwargs):
+        return torch.tensor(float("nan"), requires_grad=True), {"reward": 0.0, "ce": 0.0, "rl": 0.0}
+
+    monkeypatch.setattr(lt, "rlcd_loss", nan_loss)
+    with pytest.raises(RuntimeError, match="non-finite loss"):
+        train(tiny_base, toy_records(), str(tmp_path / "run"), TrainConfig(**FAST), device="cpu")
+    assert not (tmp_path / "run" / "model.safetensors").exists()
+
+
+@pytest.mark.skipif(torch.cuda.is_available(), reason="checks the no-CUDA error path")
+def test_cuda_without_cuda_is_an_error():
+    with pytest.raises(RuntimeError, match="CUDA requested"):
+        pick_device("cuda")
+
+
+def test_train_cli(tiny_base, tmp_path):
+    from laya.data import write_jsonl
+    data = str(tmp_path / "train.jsonl")
+    write_jsonl(data, toy_records())
+    out = str(tmp_path / "run")
+    rc = train_main(["--data", data, "--base", tiny_base, "--out", out, "--device", "cpu", "--epochs", "1",
+                     "--micro-batch", "8", "--grad-accum", "1", "--no-gradient-checkpointing",
+                     "--calib-fraction", "0.25"])
+    assert rc == 0 and _read(out + "/train_meta.json")["config"]["epochs"] == 1
+    with pytest.raises(SystemExit) as e:
+        train_main(["--help"])
+    assert e.value.code == 0
