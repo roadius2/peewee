@@ -103,3 +103,24 @@ def test_collect_records_uses_agent_pipeline(fake_tok):
     assert [(qt, k) for qt, _, _, k in recs] == [(0, 3), (2, 2), (1, 3), (0, 3), (1, 3), (2, 2)]
     assert recs[0][1].tolist() == [0.0, 1.0, 2.0]                       # raw logits kept
     assert recs[-1][2].tolist() == pytest.approx([0.75, 0.25])
+
+
+def test_calibrate_command_fits_a_file_that_eval_and_load_apply(tiny_base, tmp_path):
+    """`peewee calibrate` on labelled cases writes a calibration file; `peewee eval --calibration` and
+    `load(..., calibration=)` both use it."""
+    import json
+
+    from peewee_decide.__main__ import main
+    from peewee_decide.agent import Agent
+    from peewee_decide.data import write_jsonl
+    from tests.conftest import toy_records
+    data, out, rep = str(tmp_path / "cases.jsonl"), str(tmp_path / "calib.json"), str(tmp_path / "rep.json")
+    write_jsonl(data, toy_records(12))
+    assert main(["calibrate", tiny_base, "--data", data, "--device", "cpu", "--out", out]) == 0
+    payload = json.load(open(out))
+    assert len(payload["temperature"]) == 3
+    assert payload["meta"]["n_records"] == 36 and payload["meta"]["target"] == "label"
+    assert payload["meta"]["data_sha256"] and "ece_after" in payload["meta"]
+    assert Agent(tiny_base, device="cpu", calibration=out).temperature == payload["temperature"]
+    assert main(["eval", tiny_base, "--data", data, "--device", "cpu", "--calibration", out, "--out", rep]) == 0
+    assert json.load(open(rep))["calibration"] == out

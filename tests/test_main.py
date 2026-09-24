@@ -10,7 +10,7 @@ import pytest
 from peewee_decide.__main__ import main
 
 
-@pytest.mark.parametrize("cmd", ["serve", "export-onnx", "train", "eval", "prepare-data"])
+@pytest.mark.parametrize("cmd", ["serve", "export-onnx", "train", "eval", "calibrate", "prepare-data"])
 def test_subcommands_are_dispatched(cmd, monkeypatch, capsys):
     monkeypatch.setitem(sys.modules, "uvicorn", types.ModuleType("uvicorn"))    # serve imports it; not in [dev]
     with pytest.raises(SystemExit) as e:

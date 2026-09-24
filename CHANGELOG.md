@@ -28,6 +28,17 @@ upstream v0.3.4 (`d113dca`).
   exactly on .5 now holds out one more group than before.
 
 ### Added
+- **mix-v1 is published** on the Hugging Face Hub as `roadius/peewee-mix-v1` (Apache 2.0). It is the
+  model name `mix-v1` (aliases `peewee`, `mix`), so `peewee serve --models mix-v1`,
+  `peewee eval mix-v1` and `peewee_decide.load("roadius/peewee-mix-v1")` all work. Its built-in
+  temperatures are fitted on a balanced pool of typed-decisions and Open-Jev held-out data (ECE
+  0.188 → 0.055 on typed-decisions test, accuracy unchanged). Per-dataset calibration files ship
+  with it and are in `calibration/mix-v1-*.json`. `Router(preload=True)` now also loads mix-v1;
+  the `peewee serve` default (`english,multilingual`) and language routing are unchanged.
+- `peewee calibrate MODEL --data FILE --out calib.json [--target label|probabilities]` fits
+  temperatures for a workload from labelled cases. `peewee eval --calibration FILE` scores with
+  them. `peewee train` now fits its held-out temperatures through the same code
+  (`peewee_decide.calibrate.fit_on_cases`).
 - `scripts/jev_compare.py` benchmarks Peewee against TypeSafe's Jev on the same cases and scores
   both with `peewee eval`'s scorer. It runs Jev over the API (resumable, and splits cases over the
   request limit), runs a Peewee checkpoint, and reports accuracy, ECE, Brier, agreement, latency and

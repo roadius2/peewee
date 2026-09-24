@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-green.svg" alt="Apache 2.0" /></a>
   <img src="https://img.shields.io/badge/python-3.9%20%E2%80%93%203.13-blue.svg" alt="Python 3.9 to 3.13" />
-  <img src="https://img.shields.io/badge/weights-train%20your%20own-orange.svg" alt="Train your own weights" />
+  <a href="https://huggingface.co/roadius/peewee-mix-v1"><img src="https://img.shields.io/badge/weights-roadius%2Fpeewee--mix--v1-orange.svg" alt="Weights on Hugging Face" /></a>
 </p>
 
 ---
@@ -73,9 +73,14 @@ Three points stand out:
 - **Against Jev, Peewee leads on accuracy on all three splits.** Peewee trained on the typed-decisions
   and Open-Jev train splits, so the out-of-distribution split is the fair one. There the lead is
   0.831 to 0.803, and it comes from score questions.
-- **Jev is better calibrated.** Its confidence tracks reality more closely on two of the three splits
-  (ECE 0.045 against 0.188 on typed-decisions, 0.049 against 0.135 on OOD). Fitting temperatures
-  per workload is the open item.
+- **Calibration depends on fitting temperatures to the workload.**
+  - With its per-dataset calibration files, mix-v1 is better calibrated than Jev on both
+    in-distribution splits (ECE 0.021 against 0.045 on typed-decisions, 0.011 against 0.022 on
+    Open-Jev test).
+  - The built-in temperatures give 0.055 and 0.023.
+  - On OOD, Jev stays better calibrated (0.049 against 0.147), because mix-v1 is overconfident on
+    unfamiliar tasks. Run `peewee calibrate` on your own labelled cases before trusting a
+    confidence threshold.
 
 A Peewee call is one forward pass however many questions ride along, so extra questions cost
 almost nothing.
@@ -85,7 +90,8 @@ almost nothing.
 | p50 per case (about 5 questions) | **17 ms** (RTX 5090), 299 ms (M5 Max laptop) | 282 ms |
 | questions/second, one GPU | **1,338** (RTX 5090, 32 clients) | — |
 | questions/second, 8 CPU cores | 41 | — |
-| ECE, OOD split | 0.135 | **0.049** |
+| ECE, typed-decisions (own calibration file) | **0.021** | 0.045 |
+| ECE, OOD split (built-in temperatures) | 0.147 | **0.049** |
 | cost per million decisions | your electricity | per-token API pricing (about $0.19 for this 28k-question benchmark) |
 
 Full methodology, per-workflow breakdowns, the honest losses and every raw report:
@@ -101,8 +107,12 @@ cd peewee
 pip install -e ".[server]"          # add train, onnx or dev as needed
 ```
 
-The base encoders come from the Hugging Face hub on first use. Peewee's own fine-tuned weights are
-not published yet; the training recipe below reproduces `mix-v1` in under two hours on one GPU.
+Peewee's own checkpoint, `mix-v1`, is on the Hugging Face Hub as
+[`roadius/peewee-mix-v1`](https://huggingface.co/roadius/peewee-mix-v1) (Apache 2.0, about 800 MB)
+and downloads on first use. Load it with `peewee_decide.load("roadius/peewee-mix-v1")`, or by name as
+`mix-v1` (alias `peewee`): `peewee serve --models mix-v1`. Laya's upstream checkpoints stay available
+as `english`, `multilingual` and `typed-decisions`. The training recipe below reproduces `mix-v1` in
+under two hours on one GPU.
 
 ## Use it
 
@@ -253,7 +263,7 @@ or, at training time, `peewee train --calib-data your-holdout.jsonl`.
 | `reports/` | raw validation and training evidence per machine |
 | `docs/GPU_VALIDATION.md` | how to reproduce the GPU runs |
 
-Tests run without weights or network: `python -m pytest` (260 tests, about 10 seconds).
+Tests run without weights or network: `python -m pytest` (282 tests, about 10 seconds).
 
 ---
 

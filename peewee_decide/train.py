@@ -23,7 +23,7 @@ import torch
 
 from .agent import _tokenizer_dir, resolve_checkpoint
 from .common import build_model, collate_items, proper_reward
-from .data import _group_of, read_jsonl, record_to_items, reference_index, split_cases, target_vector, validate_record
+from .data import _group_of, read_jsonl, record_to_items, split_cases, validate_record
 
 logger = logging.getLogger("peewee_decide.train")
 
@@ -256,15 +256,6 @@ def _save_checkpoint(model, tok, cfg: Dict[str, Any], out_dir: str) -> None:
     _write_json(os.path.join(out_dir, "rl_agent_config.json"), cfg)
 
 
-def _calibration_target(qdef: Dict[str, Any], target: Dict[str, Any], kind: str) -> List[float]:
-    """What temperatures are fitted to: the training distribution, or a one-hot of the reference answer."""
-    if kind == "probabilities":
-        return target_vector(qdef, target)
-    v = [0.0] * len(target_vector(qdef, target))
-    v[reference_index(qdef, target)] = 1.0
-    return v
-
-
 def _calibrate(out_dir: str, held: Sequence[Dict[str, Any]], device: torch.device,
                skipped: Sequence[str] = (), target: str = "probabilities") -> Optional[Dict[str, Any]]:
     """Load the saved checkpoint back through the runtime and fit temperatures on the held-out cases.
@@ -279,25 +270,16 @@ def _calibrate(out_dir: str, held: Sequence[Dict[str, Any]], device: torch.devic
     record left with no questions at all is dropped.
     """
     from .agent import Agent
-    from .calibrate import collect_records, fit_temperature_map
-    skip = set(skipped)
+    from .calibrate import fit_on_cases
     agent = Agent(out_dir, device=str(device))
-    examples = []
-    for r in held:
-        questions = {qid: qd for qid, qd in r["questions"].items() if "%s/%s" % (r["id"], qid) not in skip}
-        if not questions:
-            continue
-        targets = {qid: _calibration_target(qd, r["targets"][qid], target) for qid, qd in questions.items()}
-        examples.append((r["state"], questions, targets))
-    recs = collect_records(agent, examples, batch_size=32)
+    fit = fit_on_cases(agent, held, target, skipped)
     del agent
-    if not recs:
+    if fit is None:
         return None
-    fit = fit_temperature_map(recs)
     rep = fit["report"]["all"]
     return {"temperature": [float(x) for x in fit["temperature"]],
             "temperature_by_options": {k: float(v) for k, v in fit["temperature_by_options"].items()},
-            "n_by_bucket": fit["n_by_bucket"], "n_records": len(recs),
+            "n_by_bucket": fit["n_by_bucket"], "n_records": fit["n_records"],
             "heldout_ece_before": rep["before"]["ece"], "heldout_ece_after": rep["after"]["ece"]}
 
 

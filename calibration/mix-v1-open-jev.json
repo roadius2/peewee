@@ -1,0 +1,33 @@
+{
+  "temperature": [
+    1.7857117652893066,
+    1.991113305091858,
+    1.9166796207427979
+  ],
+  "temperature_by_options": {
+    "choice:3-5": 1.8764071464538574,
+    "score:3-5": 1.991113305091858,
+    "noul:2": 1.9166796207427979,
+    "choice:11+": 1.0,
+    "choice:6-10": 0.9312652945518494,
+    "choice:2": 2.2973504066467285
+  },
+  "meta": {
+    "model": "runs/mix-v1",
+    "data": "data/open-jev/calibration.jsonl",
+    "data_sha256": "d008fe4ed6a386655d0056eca5c40c0187ca06b174e5d0a561163807fff522ab",
+    "target": "label",
+    "n_records": 4672,
+    "n_by_bucket": {
+      "choice:3-5": 702,
+      "score:3-5": 630,
+      "noul:2": 2989,
+      "choice:11+": 64,
+      "choice:6-10": 219,
+      "choice:2": 68
+    },
+    "ece_before": 0.017666671921127426,
+    "ece_after": 0.006545156888331526,
+    "encoder": "answerdotai/ModernBERT-large"
+  }
+}

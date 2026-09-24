@@ -5,7 +5,8 @@ USAGE = """usage: peewee serve [--host H] [--port P] [--models a,b] [--device D]
        peewee export-onnx <checkpoint> <out_dir> [--quantize]
        peewee prepare-data typed-decisions|open-jev --out DIR [--config NAME]
        peewee train --data FILE --base NAME|DIR --out DIR [options; see peewee train --help]
-       peewee eval NAME|DIR --data FILE [--device D] [--out report.json]"""
+       peewee eval NAME|DIR --data FILE [--device D] [--calibration calib.json] [--out report.json]
+       peewee calibrate NAME|DIR --data FILE --out calib.json [--target label|probabilities]"""
 
 
 def main(argv=None):
@@ -21,6 +22,8 @@ def main(argv=None):
         from .train import main as run
     elif cmd == "eval":
         from .evaluate import main as run
+    elif cmd == "calibrate":
+        from .calibrate import main as run
     else:
         print(USAGE, file=sys.stderr)
         return 2
