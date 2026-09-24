@@ -1,0 +1,175 @@
+{
+  "n_cases": 1920,
+  "n_questions": 10356,
+  "overall": {
+    "n": 10356,
+    "accuracy": 0.9403,
+    "soft_accuracy": 0.9259,
+    "brier": 0.058,
+    "total_variation": 0.0588,
+    "ece": 0.0114,
+    "mean_confidence": 0.9427,
+    "score_mae": 0.0827,
+    "score_within_one": 0.9716
+  },
+  "by_type": {
+    "choice": {
+      "n": 2408,
+      "accuracy": 0.8405,
+      "soft_accuracy": 0.7968,
+      "brier": 0.1237,
+      "total_variation": 0.1422,
+      "ece": 0.0243,
+      "mean_confidence": 0.8274
+    },
+    "score": {
+      "n": 1584,
+      "accuracy": 0.9438,
+      "soft_accuracy": 0.9307,
+      "brier": 0.0631,
+      "total_variation": 0.0623,
+      "ece": 0.0137,
+      "mean_confidence": 0.9449,
+      "score_mae": 0.0827,
+      "score_within_one": 0.9716
+    },
+    "noul": {
+      "n": 6364,
+      "accuracy": 0.9772,
+      "soft_accuracy": 0.9736,
+      "brier": 0.0318,
+      "total_variation": 0.0264,
+      "ece": 0.0093,
+      "mean_confidence": 0.9857
+    }
+  },
+  "latency_ms": {
+    "p50": 10.18,
+    "p95": 54.06
+  },
+  "latency_ms_per_question": {
+    "p50": 4.12,
+    "p95": 8.52
+  },
+  "by_workflow": {
+    "customer-control-v1": {
+      "n": 606,
+      "accuracy": 0.9719,
+      "soft_accuracy": 0.9685,
+      "brier": 0.0002,
+      "total_variation": 0.0052,
+      "ece": 0.0124,
+      "mean_confidence": 0.9699,
+      "score_mae": 0.0046,
+      "score_within_one": 1.0
+    },
+    "painting-geometry-v1": {
+      "n": 3072,
+      "accuracy": 0.9964,
+      "soft_accuracy": 0.9963,
+      "brier": 0.0062,
+      "total_variation": 0.0037,
+      "ece": 0.0031,
+      "mean_confidence": 0.9993,
+      "score_mae": 0.0004,
+      "score_within_one": 1.0
+    },
+    "reasoning-control-v1": {
+      "n": 681,
+      "accuracy": 0.6872,
+      "soft_accuracy": 0.6524,
+      "brier": 0.3966,
+      "total_variation": 0.3476,
+      "ece": 0.0856,
+      "mean_confidence": 0.7616,
+      "score_mae": 0.5683,
+      "score_within_one": 0.8018
+    },
+    "snake-v1": {
+      "n": 1392,
+      "accuracy": 0.9001,
+      "soft_accuracy": 0.8781,
+      "brier": 0.0872,
+      "total_variation": 0.0858,
+      "ece": 0.0272,
+      "mean_confidence": 0.9129
+    },
+    "tic_tac_toe-v1": {
+      "n": 472,
+      "accuracy": 0.5424,
+      "soft_accuracy": 0.3732,
+      "brier": 0.3366,
+      "total_variation": 0.4322,
+      "ece": 0.1101,
+      "mean_confidence": 0.4365
+    },
+    "tile_platformer-v1": {
+      "n": 202,
+      "accuracy": 0.9901,
+      "soft_accuracy": 0.9899,
+      "brier": 0.0165,
+      "total_variation": 0.0101,
+      "ece": 0.0078,
+      "mean_confidence": 0.9979
+    },
+    "trex_runner-v1": {
+      "n": 4,
+      "accuracy": 0.75,
+      "soft_accuracy": 0.6029,
+      "brier": 0.3363,
+      "total_variation": 0.3971,
+      "ece": 0.3494,
+      "mean_confidence": 0.6368
+    },
+    "vizdoom-basic-v1": {
+      "n": 858,
+      "accuracy": 0.9848,
+      "soft_accuracy": 0.9748,
+      "brier": 0.0214,
+      "total_variation": 0.0252,
+      "ece": 0.0091,
+      "mean_confidence": 0.9809,
+      "score_mae": 0.0009,
+      "score_within_one": 1.0
+    },
+    "workflow-controls-v1/agent_trace_observability": {
+      "n": 357,
+      "accuracy": 0.9944,
+      "soft_accuracy": 0.9915,
+      "brier": 0.0105,
+      "total_variation": 0.0085,
+      "ece": 0.0034,
+      "mean_confidence": 0.9964
+    },
+    "workflow-controls-v1/customer_service": {
+      "n": 456,
+      "accuracy": 1.0,
+      "soft_accuracy": 0.9992,
+      "brier": 0.0,
+      "total_variation": 0.0008,
+      "ece": 0.0008,
+      "mean_confidence": 0.9992
+    },
+    "workflow-controls-v1/invoice_processing": {
+      "n": 930,
+      "accuracy": 1.0,
+      "soft_accuracy": 0.9989,
+      "brier": 0.0001,
+      "total_variation": 0.0011,
+      "ece": 0.0011,
+      "mean_confidence": 0.9989
+    },
+    "workflow-controls-v1/security_incidents": {
+      "n": 1326,
+      "accuracy": 0.997,
+      "soft_accuracy": 0.9966,
+      "brier": 0.003,
+      "total_variation": 0.0034,
+      "ece": 0.0034,
+      "mean_confidence": 0.9977
+    }
+  },
+  "model": "runs/mix-v1",
+  "data": "data/open-jev/test.jsonl",
+  "calibration": "runs/calib/mix-v1-open-jev.json"
+}

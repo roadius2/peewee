@@ -302,7 +302,7 @@ The original plan, kept for reference:
 - **Chunk-and-aggregate** fallback for genuinely long inputs: score each chunk, combine with
   a learned or fixed rule (max for risk questions, last-chunk-weighted for state questions).
 
-### Phase 4: per-workload classifiers — training CLI done (`peewee train`, `peewee eval`, `peewee prepare-data`), and mixing datasets beats training on either alone (2026-09-22); teacher labelling and the gating harness are next
+### Phase 4: per-workload classifiers — training CLI done (`peewee train`, `peewee eval`, `peewee prepare-data`), and mixing datasets beats training on either alone (2026-09-22). mix-v1 was published as `roadius/peewee-mix-v1` with per-workload calibration (`peewee calibrate`) on 2026-09-23. Teacher labelling (never from Jev: TypeSafe's terms forbid training on its outputs) and the gating harness are next
 - Mixing typed-decisions (upsampled 4x) with Open-Jev gave the best checkpoint on every split: 0.8005 on
   typed-decisions test against the published checkpoint's 0.7685, while matching the Open-Jev specialist on
   Open-Jev test and OOD. Calibration does not mix the same way — one temperature map fitted on a combined

@@ -87,11 +87,12 @@ def evaluate(agent, records: Sequence[Dict[str, Any]], truncate: Optional[str] =
     return report
 
 
-def load_model_for_eval(spec: str, device: Optional[str] = None):
-    """A checkpoint directory, a hub repo id, or a checkpoint name (english, multilingual, ...)."""
+def load_model_for_eval(spec: str, device: Optional[str] = None, calibration: Optional[str] = None):
+    """A checkpoint directory, a hub repo id, or a checkpoint name (english, multilingual, ...).
+    `calibration` replaces the checkpoint's temperatures with a `peewee calibrate` file."""
     from .train import resolve_base
     model_dir, _cfg = resolve_base(spec)
-    return Agent(model_dir, device=device)
+    return Agent(model_dir, device=device, calibration=calibration)
 
 
 def format_report(rep: Dict[str, Any]) -> str:
@@ -111,10 +112,12 @@ def main(argv=None) -> int:
     ap.add_argument("--data", required=True, help="cases, JSONL (schema in peewee_decide/data.py)")
     ap.add_argument("--device", help="cuda, cpu or mps (default: best available)")
     ap.add_argument("--truncate", choices=["left", "right"], help="state truncation side (default: runtime default)")
+    ap.add_argument("--calibration", help="calibration JSON from `peewee calibrate` (default: the checkpoint's)")
     ap.add_argument("--out", help="write the full report as JSON here")
     args = ap.parse_args(argv)
-    rep = evaluate(load_model_for_eval(args.model, args.device), read_jsonl(args.data), truncate=args.truncate)
-    rep["model"], rep["data"] = args.model, args.data
+    rep = evaluate(load_model_for_eval(args.model, args.device, args.calibration), read_jsonl(args.data),
+                   truncate=args.truncate)
+    rep["model"], rep["data"], rep["calibration"] = args.model, args.data, args.calibration
     print(format_report(rep))
     if args.out:
         with open(args.out, "w") as f:

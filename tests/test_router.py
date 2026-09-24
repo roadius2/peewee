@@ -133,6 +133,13 @@ def test_model_specs():
     assert _repo_str("some/repo") == "some/repo"
 
 
+def test_mix_v1_is_a_named_model_with_aliases():
+    assert DEFAULT_MODELS["mix-v1"] == ("roadius/peewee-mix-v1", None)
+    assert STANDALONE_MODELS["mix-v1"] == "roadius/peewee-mix-v1"
+    for alias in ("mix-v1", "peewee", "mix", "Peewee-Mix-V1"):
+        assert normalise_name(alias) == "mix-v1"
+
+
 def test_standalone_and_local_overrides():
     hi = {"m": "मुझसे दो बार"}
     assert Router().route(hi, Q_GENERIC)["repo"] == "convaiinnovations/laya/multilingual"
@@ -194,9 +201,9 @@ def test_incremental_preload_keeps_residents(stub_build):
 
 def test_preload_all_and_touch(stub_build):
     r = Router(max_loaded=1, preload=True)
-    assert sorted(r.loaded) == ["english", "multilingual", "typed-decisions"]
+    assert sorted(r.loaded) == ["english", "mix-v1", "multilingual", "typed-decisions"]
     r.load("english")                       # touching a resident model evicts nothing
-    assert sorted(r.loaded) == ["english", "multilingual", "typed-decisions"]
+    assert sorted(r.loaded) == ["english", "mix-v1", "multilingual", "typed-decisions"]
     assert stub_build.count("english") == 1
 
 

@@ -1,0 +1,103 @@
+{
+  "n_cases": 400,
+  "n_questions": 2000,
+  "overall": {
+    "n": 2000,
+    "accuracy": 0.8005,
+    "soft_accuracy": 0.5842,
+    "brier": 0.1197,
+    "total_variation": 0.2233,
+    "ece": 0.0214,
+    "mean_confidence": 0.8104,
+    "score_mae": 0.2673,
+    "score_within_one": 0.9862
+  },
+  "by_type": {
+    "choice": {
+      "n": 600,
+      "accuracy": 0.7667,
+      "soft_accuracy": 0.5452,
+      "brier": 0.1472,
+      "total_variation": 0.2619,
+      "ece": 0.0417,
+      "mean_confidence": 0.8
+    },
+    "score": {
+      "n": 800,
+      "accuracy": 0.7788,
+      "soft_accuracy": 0.5128,
+      "brier": 0.1342,
+      "total_variation": 0.2574,
+      "ece": 0.0261,
+      "mean_confidence": 0.7776,
+      "score_mae": 0.2673,
+      "score_within_one": 0.9862
+    },
+    "noul": {
+      "n": 600,
+      "accuracy": 0.8633,
+      "soft_accuracy": 0.7183,
+      "brier": 0.073,
+      "total_variation": 0.1393,
+      "ece": 0.023,
+      "mean_confidence": 0.8644
+    }
+  },
+  "latency_ms": {
+    "p50": 17.35,
+    "p95": 22.4
+  },
+  "latency_ms_per_question": {
+    "p50": 3.47,
+    "p95": 4.48
+  },
+  "by_workflow": {
+    "agent_trace_observability": {
+      "n": 500,
+      "accuracy": 0.752,
+      "soft_accuracy": 0.5145,
+      "brier": 0.1411,
+      "total_variation": 0.2586,
+      "ece": 0.0292,
+      "mean_confidence": 0.7763,
+      "score_mae": 0.2891,
+      "score_within_one": 0.995
+    },
+    "customer_service": {
+      "n": 500,
+      "accuracy": 0.804,
+      "soft_accuracy": 0.6027,
+      "brier": 0.1275,
+      "total_variation": 0.2266,
+      "ece": 0.0533,
+      "mean_confidence": 0.8297,
+      "score_mae": 0.2243,
+      "score_within_one": 0.995
+    },
+    "invoice_processing": {
+      "n": 500,
+      "accuracy": 0.866,
+      "soft_accuracy": 0.6979,
+      "brier": 0.0977,
+      "total_variation": 0.1745,
+      "ece": 0.0451,
+      "mean_confidence": 0.8693,
+      "score_mae": 0.2536,
+      "score_within_one": 0.96
+    },
+    "security_incidents": {
+      "n": 500,
+      "accuracy": 0.78,
+      "soft_accuracy": 0.5217,
+      "brier": 0.1126,
+      "total_variation": 0.2337,
+      "ece": 0.0465,
+      "mean_confidence": 0.7662,
+      "score_mae": 0.3024,
+      "score_within_one": 0.995
+    }
+  },
+  "model": "runs/mix-v1",
+  "data": "data/typed-decisions/test.jsonl",
+  "calibration": "runs/calib/mix-v1-typed-decisions.json"
+}

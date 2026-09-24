@@ -42,6 +42,8 @@ DEFAULT_MODELS = {
     "english": (BUNDLE_REPO, None),
     "multilingual": (BUNDLE_REPO, "multilingual"),
     "typed-decisions": (BUNDLE_REPO, "typed-decisions"),
+    # Peewee's own checkpoint (typed-decisions + Open-Jev), with its own calibration files.
+    "mix-v1": ("roadius/peewee-mix-v1", None),
 }
 
 # The same checkpoints also live in their own repos, for anyone who prefers them.
@@ -49,6 +51,7 @@ STANDALONE_MODELS = {
     "english": "convaiinnovations/laya",
     "multilingual": "convaiinnovations/laya-multilingual",
     "typed-decisions": "convaiinnovations/laya-typed-decisions",
+    "mix-v1": "roadius/peewee-mix-v1",
 }
 
 
@@ -71,6 +74,7 @@ _ALIASES = {
     "multi": "multilingual", "ml": "multilingual", "laya-multilingual": "multilingual",
     "typed": "typed-decisions", "typed_decisions": "typed-decisions",
     "laya-typed-decisions": "typed-decisions", "decisions": "typed-decisions",
+    "peewee": "mix-v1", "mix": "mix-v1", "peewee-mix-v1": "mix-v1",
 }
 
 # Question-id signatures of the four typed-decisions workflows, used only when

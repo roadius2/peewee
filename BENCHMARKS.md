@@ -391,6 +391,47 @@ training or calibration.
   were sent one at a time or 5 at a time. Peewee took 10–17 ms per case in-process on the RTX 5090.
 - **Cost:** 4.50M Jev input tokens, about $0.19.
 
+### Calibrating mix-v1 per workload (2026-09-23)
+
+`peewee calibrate` fits temperatures on labelled cases the model never trained on:
+
+- the 130 typed-decisions cases (650 questions) that mix-v1's training held out;
+- Open-Jev's official `calibration` split (1,081 cases, 4,672 questions);
+- a pool of both;
+- a *balanced* pool, with the typed-decisions cases repeated 7× to match Open-Jev's size.
+
+Every fit targets the reference answer (`--target label`), and every row was scored on the untouched
+test splits. Temperatures never change accuracy, which stayed at 0.8005, 0.9403 and 0.8310
+throughout.
+
+| ECE with these temperatures | typed-decisions | Open-Jev test | Open-Jev OOD |
+|---|---|---|---|
+| the map from training (86% Open-Jev held-out) | 0.188 | 0.013 | 0.135 |
+| typed-decisions fit | **0.021** | 0.031 | 0.152 |
+| Open-Jev fit | 0.274 | **0.011** | 0.133 |
+| pooled | 0.173 | 0.016 | 0.140 |
+| **balanced (the published default)** | 0.055 | 0.023 | 0.147 |
+| *Jev 1.13.0, measured* | *0.045* | *0.022* | *0.049* |
+
+What the table shows:
+
+- **Per-workload temperatures work.** Fitted on each dataset's own data, mix-v1 is better calibrated
+  than Jev on both in-distribution splits.
+- **The two datasets need opposite corrections.** typed-decisions needs sharpening (T < 1) and
+  Open-Jev needs softening, so a pool dominated by Open-Jev cannot serve both. Balancing the pool
+  gives a usable single default.
+- **No fit fixes OOD.** mix-v1's mean confidence there is 0.98 against 0.83 accuracy. Fitting on
+  familiar data cannot correct overconfidence on unfamiliar tasks, which is why the model card tells
+  users to calibrate on their own cases.
+- **Sharpening costs Brier.** It improves ECE against the reference answers but moves probabilities
+  away from typed-decisions' soft teacher distributions: Brier goes from 0.057 to 0.083.
+
+The published checkpoint (`roadius/peewee-mix-v1`) has the same weights as `runs/mix-v1`. It carries
+the balanced temperatures in `rl_agent_config.json`, and the typed-decisions and Open-Jev fits under
+`calibration/`. The same files are in this repo as `calibration/mix-v1-*.json`, and every evaluation
+is in `reports/mix-v1-calibration-20260923/`. Downloaded from the Hub into an empty cache, the
+checkpoint reproduced typed-decisions accuracy 0.8000 and ECE 0.0545 on an M5 Max.
+
 ### Apple silicon (M5 Max, 2026-09-22)
 
 On a MacBook Pro with an M5 Max (18 cores, 128 GB), mix-v1 runs on MPS in fp32. On the same cases

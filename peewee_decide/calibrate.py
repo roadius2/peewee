@@ -20,6 +20,7 @@ Matt Van Horn (mvanhorn): one temperature per question type, plus one per
 `(type, option-count bucket)` where at least MIN_BUCKET_N labelled examples exist, each fitted
 by minimising NLL over log T with LBFGS and clamped to [0.1, 10].
 """
+import argparse
 import json
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -231,6 +232,40 @@ def fit_temperature_map(records: Iterable[Record], min_bucket_n: int = MIN_BUCKE
     return out
 
 
+def calibration_target(qdef: Dict[str, Any], target: Dict[str, Any], kind: str) -> List[float]:
+    """What temperatures are fitted to for one question of a case record (`peewee_decide.data`):
+    "probabilities" is its training distribution, "label" a one-hot of the reference answer."""
+    from .data import reference_index, target_vector
+    if kind == "probabilities":
+        return target_vector(qdef, target)
+    v = [0.0] * len(target_vector(qdef, target))
+    v[reference_index(qdef, target)] = 1.0
+    return v
+
+
+def fit_on_cases(agent, cases: Sequence[Dict[str, Any]], target: str = "label", skip: Iterable[str] = (),
+                 batch_size: int = 32) -> Optional[Dict[str, Any]]:
+    """Fit a temperature map on labelled case records and apply it to `agent`.
+
+    `skip` names "case/qid" questions to leave out; a case left with no questions is dropped.
+    Returns `fit_temperature_map`'s result plus `n_records`, or None when nothing is left.
+    """
+    skip = set(skip)
+    examples = []
+    for r in cases:
+        questions = {qid: qd for qid, qd in r["questions"].items() if "%s/%s" % (r["id"], qid) not in skip}
+        if questions:
+            targets = {qid: calibration_target(qd, r["targets"][qid], target) for qid, qd in questions.items()}
+            examples.append((r["state"], questions, targets))
+    recs = collect_records(agent, examples, batch_size=batch_size)
+    if not recs:
+        return None
+    fit = fit_temperature_map(recs)
+    apply_calibration_payload(agent, fit)
+    fit["n_records"] = len(recs)
+    return fit
+
+
 # ---------------------------------------------------------------------------- persistence
 def calibration_payload(temperature, temperature_by_options, meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     payload = {
@@ -259,3 +294,35 @@ def save_calibration(path: str, temperature, temperature_by_options, meta: Optio
 def load_calibration(path: str) -> Dict[str, Any]:
     with open(path) as f:
         return json.load(f)
+
+
+def main(argv=None) -> int:
+    """`peewee calibrate MODEL --data FILE --out calib.json`: fit temperatures for a workload."""
+    from .data import read_jsonl, validate_record
+    from .evaluate import load_model_for_eval
+    from .train import _sha256
+    ap = argparse.ArgumentParser(prog="peewee calibrate",
+                                 description="Fit temperatures on labelled cases and write a calibration file.")
+    ap.add_argument("model", help="checkpoint directory or name (english, multilingual, typed-decisions)")
+    ap.add_argument("--data", required=True, help="labelled cases, JSONL (schema in peewee_decide/data.py)")
+    ap.add_argument("--out", required=True, help="calibration JSON to write")
+    ap.add_argument("--device", help="cuda, cpu or mps (default: best available)")
+    ap.add_argument("--target", choices=["label", "probabilities"], default="label",
+                    help="fit to each question's reference answer (what `peewee eval` scores) or to its target "
+                         "distribution")
+    args = ap.parse_args(argv)
+    cases = read_jsonl(args.data)
+    for r in cases:
+        validate_record(r)
+    agent = load_model_for_eval(args.model, args.device)
+    fit = fit_on_cases(agent, cases, args.target)
+    if fit is None:
+        raise SystemExit("no questions to calibrate on")
+    rep = fit["report"]["all"]
+    agent.save_calibration(args.out, meta={
+        "model": args.model, "data": args.data, "data_sha256": _sha256(args.data), "target": args.target,
+        "n_records": fit["n_records"], "n_by_bucket": fit["n_by_bucket"],
+        "ece_before": rep["before"]["ece"], "ece_after": rep["after"]["ece"]})
+    print("%d questions: ECE %.4f -> %.4f (on the fitting data) -> %s" % (
+        fit["n_records"], rep["before"]["ece"], rep["after"]["ece"], args.out))
+    return 0
