@@ -55,6 +55,21 @@ STANDALONE_MODELS = {
 }
 
 
+def _local_models(spec: str) -> Dict[str, tuple]:
+    """Checkpoints that live only on this machine, from PEEWEE_LOCAL_MODELS
+    ("name=/dir,name=/dir"): fine-tunes served by name like the built-in ones."""
+    out = {}
+    for pair in spec.split(","):
+        name, sep, path = pair.partition("=")
+        name, path = name.strip().lower(), path.strip()
+        if sep and name and path:
+            out[name] = (os.path.expanduser(path), None)
+    return out
+
+
+DEFAULT_MODELS.update(_local_models(os.environ.get("PEEWEE_LOCAL_MODELS", "")))
+
+
 def _repo_str(spec):
     """Human-readable id for a model spec: 'repo' or 'repo/subfolder'."""
     repo, sub = _split(spec)
