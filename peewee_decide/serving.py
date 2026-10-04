@@ -13,6 +13,7 @@ of queueing behind each other.
 Environment
 -----------
 PEEWEE_MODELS        comma-separated checkpoints to preload (default: english,multilingual)
+PEEWEE_LOCAL_MODELS  name=dir pairs (comma-separated) registering local checkpoints by name
 PEEWEE_DEVICE        cuda | cpu | mps (default: auto)
 PEEWEE_HF_TOKEN      Hugging Face token for private repos
 PEEWEE_CALIBRATION   path to a calibration JSON applied to every loaded checkpoint, or
